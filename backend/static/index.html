@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaxonNote — Clinical Documentation Supervisor</title>
+
+  <!-- Tailwind CSS Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <!-- Cytoscape & Dagre -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+
+  <style>
+    /* Theme transition */
+    html {
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    /* Subtle custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.4);
+      border-radius: 4px;
+    }
+    .dark ::-webkit-scrollbar-thumb {
+      background: rgba(71, 85, 105, 0.5);
+    }
+    /* Editor highlight flash on enrichment */
+    @keyframes pulse-emerald {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+      70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+    .enrichment-glow {
+      animation: pulse-emerald 1.2s ease-out;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 antialiased font-sans">
+
+  <!-- Prominent, Spacious Top Header -->
+  <header class="h-16 md:h-18 border-b border-slate-200/90 dark:border-slate-800/80 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-6 flex items-center justify-between shrink-0 select-none z-20 transition-colors">
+    
+    <!-- Left: Prominent App Identity & Knowledge Base Grounding -->
+    <div class="flex items-center space-x-3.5">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/15 to-teal-500/10 dark:from-emerald-500/25 dark:to-teal-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 flex items-center justify-center font-bold text-lg shadow-xs">
+        <i class="fa-solid fa-stethoscope"></i>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2.5">
+          <h1 class="font-bold text-lg tracking-tight text-slate-900 dark:text-white leading-none">TaxonNote</h1>
+          <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            ICD-10 Graph Grounded
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5 hidden sm:block">
+          Real-Time Physician Note Supervision • Coder Confusion Prevention
+        </p>
+      </div>
+    </div>
+
+    <!-- Right: Status, Score Badge & 3-Way Mode Switcher -->
+    <div class="flex items-center space-x-3">
+      
+      <!-- Live Supervisor Status Badge -->
+      <div id="supervisor-status-pill" class="flex items-center space-x-2 text-xs px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50 font-medium">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span id="supervisor-status-text" class="text-xs">Live Supervisor Active</span>
+      </div>
+
+      <!-- Header Coder Readiness Pill -->
+      <div id="header-readiness-pill" class="hidden md:flex items-center space-x-1.5 text-xs px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/70 font-medium">
+        <span class="text-slate-400 dark:text-slate-500">Readiness:</span>
+        <span id="header-readiness-val" class="font-bold text-emerald-600 dark:text-emerald-400">100%</span>
+      </div>
+
+      <!-- 3-Way Mode Switcher (Light / Auto / Dark) -->
+      <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200/80 dark:border-slate-700/80" role="group" aria-label="Theme switcher">
+        <button id="theme-btn-light" type="button" class="px-2.5 py-1 rounded-md flex items-center space-x-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition cursor-pointer" title="Light mode">
+          <i class="fa-solid fa-sun text-[11px] text-amber-500"></i>
+          <span class="text-[11px] hidden sm:inline">Light</span>
+        </button>
+        <button id="theme-btn-system" type="button" class="px-2.5 py-1 rounded-md flex items-center space-x-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition cursor-pointer" title="Follow system preference">
+          <i class="fa-solid fa-desktop text-[11px]"></i>
+          <span class="text-[11px] hidden sm:inline">Auto</span>
+        </button>
+        <button id="theme-btn-dark" type="button" class="px-2.5 py-1 rounded-md flex items-center space-x-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition cursor-pointer" title="Dark mode">
+          <i class="fa-solid fa-moon text-[11px] text-indigo-400"></i>
+          <span class="text-[11px] hidden sm:inline">Dark</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Enrichment Notification Toast -->
+  <div id="enrichment-toast" class="hidden fixed top-20 right-6 z-50 max-w-md bg-white dark:bg-slate-900 border border-emerald-500/50 rounded-xl p-3 shadow-xl transition-all duration-300 flex items-start space-x-3">
+    <div class="w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs shrink-0 mt-0.5">
+      <i class="fa-solid fa-check"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center space-x-2">
+        <span class="text-xs font-semibold text-slate-900 dark:text-white">Enrichment Accepted</span>
+        <span id="toast-score-delta" class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">+85% Score</span>
+      </div>
+      <p id="toast-confusion-msg" class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-snug">Note re-evaluated: Confusion resolved. Clean ICD-10 trajectory achieved.</p>
+    </div>
+    <button id="btn-close-toast" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs p-1">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+
+  <!-- Main Split Layout -->
+  <main class="flex-1 flex overflow-hidden">
+
+    <!-- LEFT PANE: Note Drafting Area -->
+    <section class="flex-1 flex flex-col bg-white dark:bg-slate-950 min-w-0 border-r border-slate-200/80 dark:border-slate-800/80">
+      
+      <!-- Enhanced Clinical Case & Editor Action Toolbar -->
+      <div class="px-5 py-2.5 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/50 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        
+        <!-- Condition / Case Selector (Prominent & Connected to Note) -->
+        <div class="flex items-center space-x-2.5 flex-1 min-w-[280px]">
+          <div class="flex items-center space-x-1.5 text-slate-600 dark:text-slate-300 shrink-0 font-medium">
+            <i class="fa-solid fa-notes-medical text-emerald-600 dark:text-emerald-400 text-xs"></i>
+            <span class="text-xs font-semibold">Clinical Scenario:</span>
+          </div>
+          <div class="relative flex-1 max-w-md">
+            <select id="template-select" class="w-full bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 pl-3 pr-8 py-1.5 shadow-xs hover:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer transition appearance-none">
+              <option value="">Load clinical case / scenario...</option>
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400 dark:text-slate-500 text-xs">
+              <i class="fa-solid fa-chevron-down text-[10px]"></i>
+            </div>
+          </div>
+          <span id="template-hint-text" class="hidden 2xl:inline-block text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-xs italic"></span>
+        </div>
+
+        <!-- Editor Metadata & Actions -->
+        <div class="flex items-center space-x-3 text-xs text-slate-400 dark:text-slate-500 shrink-0">
+          <span id="word-count-label" class="px-2 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium text-[11px]">0 words</span>
+          <button id="btn-clear" class="hover:text-slate-900 dark:hover:text-white px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/80 transition cursor-pointer" title="Clear note text">
+            <i class="fa-solid fa-rotate-left mr-1.5"></i>Clear
+          </button>
+          <button id="btn-copy" class="hover:text-slate-900 dark:hover:text-white px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/80 transition cursor-pointer" title="Copy note to clipboard">
+            <i class="fa-regular fa-copy mr-1.5"></i>Copy
+          </button>
+        </div>
+      </div>
+
+      <!-- Editor Textarea -->
+      <div class="flex-1 p-5 flex flex-col min-h-0">
+        <textarea
+          id="clinical-note-input"
+          class="w-full flex-1 bg-transparent text-slate-900 dark:text-slate-100 text-[14px] leading-relaxed resize-none focus:outline-none placeholder:text-slate-300 dark:placeholder:text-slate-700 font-sans"
+          placeholder="Start drafting the clinical note here... TaxonNote continuously checks that conditions have the required laterality, acuity, and clinical specificity for unambiguous ICD-10-CM coding."
+          spellcheck="false"
+        ></textarea>
+      </div>
+
+      <!-- Subtle Extracted Tags Tray -->
+      <div class="px-5 py-2.5 border-t border-slate-100 dark:border-slate-900 flex items-center flex-wrap gap-1.5 text-xs min-h-[36px]">
+        <span class="text-slate-400 dark:text-slate-500 text-[11px] mr-1">Extracted Concepts:</span>
+        <div id="conditions-chips-container" class="flex flex-wrap gap-1.5 items-center">
+          <span class="text-slate-400 dark:text-slate-600 text-[11px] italic">Type above to extract clinical conditions...</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANE: Assistant & Trajectory Inspector -->
+    <aside class="w-[460px] xl:w-[500px] flex flex-col bg-slate-50/70 dark:bg-slate-900/40 min-w-0 shrink-0">
+      
+      <!-- Clean Segmented Navigation Tab -->
+      <div class="h-11 px-4 flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800/80 shrink-0 bg-white/50 dark:bg-slate-900/50">
+        <div class="inline-flex bg-slate-200/60 dark:bg-slate-800/80 p-0.5 rounded-lg text-xs" role="tablist">
+          <button id="tab-btn-supervision" class="px-3 py-1 rounded-md font-medium text-slate-900 dark:text-white bg-white dark:bg-slate-700 shadow-sm transition">
+            Supervision
+            <span id="ambiguity-badge-count" class="hidden ml-1 px-1.5 py-0.1 rounded-full bg-amber-500 text-white text-[10px] font-bold">0</span>
+          </button>
+          <button id="tab-btn-preview" class="px-3 py-1 rounded-md font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
+            Claim Preview
+          </button>
+          <button id="tab-btn-fork" class="px-3 py-1 rounded-md font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
+            Fork Inspector
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 1: Supervision Feed -->
+      <div id="tab-pane-supervision" class="flex-1 overflow-y-auto p-4 space-y-3.5">
+        
+        <!-- Streamlined Score Card -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3.5 shadow-xs">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Coder Readiness</div>
+              <div class="flex items-baseline space-x-2 mt-0.5">
+                <span id="readiness-score-num" class="text-2xl font-bold text-slate-900 dark:text-white">100%</span>
+                <span id="readiness-grade-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800">Grade A</span>
+              </div>
+            </div>
+            <div id="readiness-icon-pill" class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center text-sm">
+              <i class="fa-solid fa-check"></i>
+            </div>
+          </div>
+          
+          <!-- Subtle Progress Bar -->
+          <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-3 overflow-hidden">
+            <div id="score-progress-bar" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style="width: 100%"></div>
+          </div>
+
+          <p id="readiness-summary-desc" class="text-[11px] text-slate-500 dark:text-slate-400 mt-2">All conditions are fully specified. Note is ready for medical coding.</p>
+        </div>
+
+        <!-- Documentation Gaps Header -->
+        <div class="pt-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium">
+          <span>Documentation Gaps & Ambiguities</span>
+          <span id="ambiguities-count-label" class="text-[11px]">0 active</span>
+        </div>
+
+        <!-- Ambiguity Cards Container -->
+        <div id="ambiguities-list" class="space-y-3">
+          <!-- Empty State -->
+          <div id="empty-ambiguities-card" class="bg-white/60 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60 rounded-xl p-5 text-center">
+            <i class="fa-solid fa-shield-check text-emerald-500 text-xl mb-1.5"></i>
+            <h4 class="text-xs font-semibold text-slate-800 dark:text-slate-200">No Coder Confusion Detected</h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Diagnoses contain necessary laterality and acuity for ICD-10 mapping.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB 2: Coder Claim Preview -->
+      <div id="tab-pane-preview" class="hidden flex-1 overflow-y-auto p-4 space-y-3">
+        <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">
+          Simulated translation of note into billable ICD-10-CM codes:
+        </div>
+        <div id="coder-preview-table-container">
+          <div class="text-xs text-slate-400 dark:text-slate-600 italic text-center py-8">Draft a clinical note to preview mapped diagnosis codes.</div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Trajectory Fork Inspector -->
+      <div id="tab-pane-fork" class="hidden flex-1 flex flex-col p-4 min-h-0">
+        
+        <!-- Header & Action Bar -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t-xl px-3.5 py-2.5 flex items-center justify-between shrink-0">
+          <div>
+            <div id="fork-inspector-title" class="text-xs font-semibold text-slate-800 dark:text-slate-200">Trajectory Branch Inspector</div>
+            <div id="fork-inspector-subtitle" class="text-[11px] text-slate-400 dark:text-slate-500">Tap any branch node below to accept enrichment.</div>
+          </div>
+          <div class="flex items-center space-x-1">
+            <button id="btn-fit-fork-graph" class="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded text-xs" title="Fit graph">
+              <i class="fa-solid fa-compress"></i>
+            </button>
+            <button id="btn-reset-fork-graph" class="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded text-xs" title="Reset layout">
+              <i class="fa-solid fa-arrows-rotate"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Cytoscape Canvas Container -->
+        <div class="flex-1 bg-white dark:bg-slate-950 border-x border-slate-200 dark:border-slate-800 relative min-h-[260px]">
+          <div id="cy-fork-canvas" class="w-full h-full absolute inset-0"></div>
+          <div id="fork-canvas-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-slate-400 dark:text-slate-600">
+            <i class="fa-solid fa-diagram-project text-2xl mb-2"></i>
+            <p class="text-xs max-w-xs">Select "View Fork" on an ambiguity card to visually inspect the ICD-10 branching tree.</p>
+          </div>
+        </div>
+
+        <!-- Interactive Node Selection Drawer -->
+        <div id="fork-node-enrichment-bar" class="hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-b-xl p-3 shadow-md space-y-2 shrink-0">
+          <div class="flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Selected Node:</span>
+              <span id="selected-node-badge" class="font-semibold text-slate-900 dark:text-white">Right</span>
+            </div>
+            <span id="selected-node-code-badge" class="font-mono text-emerald-600 dark:text-emerald-400 text-xs font-semibold">M25.561</span>
+          </div>
+
+          <div class="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950/60 p-2 rounded-lg border border-slate-100 dark:border-slate-800/80">
+            <span class="text-[10px] text-slate-400 uppercase font-medium">Proposed Note Enrichment:</span>
+            <div id="proposed-enrichment-preview" class="font-medium text-slate-800 dark:text-slate-200 mt-0.5">Replace "knee pain" with "right knee pain"</div>
+          </div>
+
+          <div class="flex items-center justify-end space-x-2 pt-0.5">
+            <button id="btn-cancel-node-enrichment" class="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+              Dismiss
+            </button>
+            <button id="btn-accept-node-enrichment" class="px-3.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition flex items-center space-x-1.5 cursor-pointer">
+              <i class="fa-solid fa-check text-[10px]"></i>
+              <span>Accept Enrichment</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </aside>
+
+  </main>
+
+  <!-- Application Logic -->
+  <script>
+    // App State
+    const state = {
+      noteText: "",
+      supervisionResult: null,
+      debounceTimer: null,
+      activeTab: "supervision",
+      activeAmbiguity: null,
+      selectedNodeFix: null,
+      cyInstance: null,
+      lastAcceptedFix: null,
+      currentTheme: "system", // 'light' | 'dark' | 'system'
+    };
+
+    // DOM Elements
+    const noteTextarea = document.getElementById("clinical-note-input");
+    const templateSelect = document.getElementById("template-select");
+    const supervisorStatusPill = document.getElementById("supervisor-status-pill");
+    const supervisorStatusText = document.getElementById("supervisor-status-text");
+    const wordCountLabel = document.getElementById("word-count-label");
+    const conditionsChipsContainer = document.getElementById("conditions-chips-container");
+    const ambiguitiesList = document.getElementById("ambiguities-list");
+    const emptyAmbiguitiesCard = document.getElementById("empty-ambiguities-card");
+    const readinessScoreNum = document.getElementById("readiness-score-num");
+    const readinessGradeBadge = document.getElementById("readiness-grade-badge");
+    const readinessSummaryDesc = document.getElementById("readiness-summary-desc");
+    const readinessIconPill = document.getElementById("readiness-icon-pill");
+    const scoreProgressBar = document.getElementById("score-progress-bar");
+    const ambiguityBadgeCount = document.getElementById("ambiguity-badge-count");
+    const ambiguitiesCountLabel = document.getElementById("ambiguities-count-label");
+    const coderPreviewContainer = document.getElementById("coder-preview-table-container");
+
+    // Toast Elements
+    const enrichmentToast = document.getElementById("enrichment-toast");
+    const toastScoreDelta = document.getElementById("toast-score-delta");
+    const toastConfusionMsg = document.getElementById("toast-confusion-msg");
+    const btnCloseToast = document.getElementById("btn-close-toast");
+
+    // Fork Drawer Elements
+    const forkNodeEnrichmentBar = document.getElementById("fork-node-enrichment-bar");
+    const selectedNodeBadge = document.getElementById("selected-node-badge");
+    const selectedNodeCodeBadge = document.getElementById("selected-node-code-badge");
+    const proposedEnrichmentPreview = document.getElementById("proposed-enrichment-preview");
+    const btnAcceptNodeEnrichment = document.getElementById("btn-accept-node-enrichment");
+    const btnCancelNodeEnrichment = document.getElementById("btn-cancel-node-enrichment");
+
+    // Tab buttons & panes
+    const tabBtnSupervision = document.getElementById("tab-btn-supervision");
+    const tabBtnPreview = document.getElementById("tab-btn-preview");
+    const tabBtnFork = document.getElementById("tab-btn-fork");
+    const tabPaneSupervision = document.getElementById("tab-pane-supervision");
+    const tabPanePreview = document.getElementById("tab-pane-preview");
+    const tabPaneFork = document.getElementById("tab-pane-fork");
+
+    // Theme buttons
+    const themeBtnLight = document.getElementById("theme-btn-light");
+    const themeBtnSystem = document.getElementById("theme-btn-system");
+    const themeBtnDark = document.getElementById("theme-btn-dark");
+
+    function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Initialize application
+    document.addEventListener("DOMContentLoaded", async () => {
+      initTheme();
+      setupEventListeners();
+      await loadTemplates();
+    });
+
+    // Theme Management: 3-Way (Light, Dark, System)
+    function initTheme() {
+      const savedTheme = localStorage.getItem("taxonnote-theme") || "system";
+      setTheme(savedTheme, false);
+
+      // Listen for OS system theme changes
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+        if (state.currentTheme === "system") {
+          applyThemeClasses();
+        }
+      });
+    }
+
+    function setTheme(theme, save = true) {
+      state.currentTheme = theme;
+      if (save) localStorage.setItem("taxonnote-theme", theme);
+      applyThemeClasses();
+    }
+
+    function applyThemeClasses() {
+      const isDark = (state.currentTheme === "dark") ||
+        (state.currentTheme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+      if (isDark) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+
+      // Update button active states
+      const inactiveClass = "px-2.5 py-1 rounded-md flex items-center space-x-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition cursor-pointer";
+      const activeClass = "px-2.5 py-1 rounded-md flex items-center space-x-1.5 text-xs font-semibold bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs transition cursor-pointer";
+
+      [themeBtnLight, themeBtnSystem, themeBtnDark].forEach(btn => {
+        btn.className = inactiveClass;
+      });
+
+      if (state.currentTheme === "light") {
+        themeBtnLight.className = activeClass;
+      } else if (state.currentTheme === "dark") {
+        themeBtnDark.className = activeClass;
+      } else {
+        themeBtnSystem.className = activeClass;
+      }
+
+      // Update Cytoscape style if instance exists
+      if (state.cyInstance) {
+        updateCytoscapeTheme(isDark);
+      }
+    }
+
+    function setupEventListeners() {
+      // Theme switcher buttons
+      themeBtnLight.addEventListener("click", () => setTheme("light"));
+      themeBtnSystem.addEventListener("click", () => setTheme("system"));
+      themeBtnDark.addEventListener("click", () => setTheme("dark"));
+
+      // Live debounced note editing
+      noteTextarea.addEventListener("input", (e) => {
+        state.noteText = e.target.value;
+        updateWordCount();
+        setSupervisorStatus(false);
+        clearTimeout(state.debounceTimer);
+        state.debounceTimer = setTimeout(() => {
+          evaluateNote();
+        }, 450);
+      });
+
+      // Clinical template selector
+      templateSelect.addEventListener("change", (e) => {
+        const selectedId = e.target.value;
+        const hint = document.getElementById("template-hint-text");
+        if (!selectedId) {
+          if (hint) hint.textContent = "";
+          return;
+        }
+        const templates = templateSelect._templatesData || [];
+        const found = templates.find(t => t.id === selectedId);
+        if (found) {
+          noteTextarea.value = found.text;
+          state.noteText = found.text;
+          updateWordCount();
+          if (hint) hint.textContent = found.description || "";
+          enrichmentToast.classList.add("hidden");
+          forkNodeEnrichmentBar.classList.add("hidden");
+          evaluateNote();
+        }
+      });
+
+      // Clear & Copy buttons
+      document.getElementById("btn-clear").addEventListener("click", () => {
+        noteTextarea.value = "";
+        state.noteText = "";
+        templateSelect.value = "";
+        const hint = document.getElementById("template-hint-text");
+        if (hint) hint.textContent = "";
+        updateWordCount();
+        enrichmentToast.classList.add("hidden");
+        forkNodeEnrichmentBar.classList.add("hidden");
+        evaluateNote();
+      });
+
+      document.getElementById("btn-copy").addEventListener("click", () => {
+        navigator.clipboard.writeText(noteTextarea.value);
+        const btn = document.getElementById("btn-copy");
+        btn.innerHTML = `<i class="fa-solid fa-check mr-1 text-emerald-500"></i>Copied`;
+        setTimeout(() => {
+          btn.innerHTML = `<i class="fa-regular fa-copy mr-1"></i>Copy`;
+        }, 1500);
+      });
+
+      // Segmented Tabs
+      tabBtnSupervision.addEventListener("click", () => switchTab("supervision"));
+      tabBtnPreview.addEventListener("click", () => switchTab("preview"));
+      tabBtnFork.addEventListener("click", () => switchTab("fork"));
+
+      // Cytoscape buttons
+      document.getElementById("btn-fit-fork-graph").addEventListener("click", () => {
+        if (state.cyInstance) state.cyInstance.fit(undefined, 25);
+      });
+      document.getElementById("btn-reset-fork-graph").addEventListener("click", () => {
+        if (state.cyInstance) {
+          state.cyInstance.layout({ name: "dagre", rankDir: "LR", animate: true, animationDuration: 300 }).run();
+        }
+      });
+
+      // Toast dismiss
+      btnCloseToast.addEventListener("click", () => {
+        enrichmentToast.classList.add("hidden");
+      });
+
+      // Node Enrichment Drawer actions
+      btnCancelNodeEnrichment.addEventListener("click", () => {
+        forkNodeEnrichmentBar.classList.add("hidden");
+        state.selectedNodeFix = null;
+      });
+
+      btnAcceptNodeEnrichment.addEventListener("click", () => {
+        if (state.selectedNodeFix) {
+          applyQuickFix(state.selectedNodeFix);
+          forkNodeEnrichmentBar.classList.add("hidden");
+        }
+      });
+    }
+
+    function switchTab(tabId) {
+      state.activeTab = tabId;
+      const buttons = [tabBtnSupervision, tabBtnPreview, tabBtnFork];
+      const panes = [tabPaneSupervision, tabPanePreview, tabPaneFork];
+
+      buttons.forEach(btn => {
+        btn.className = "px-3 py-1 rounded-md font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition";
+      });
+      panes.forEach(pane => pane.classList.add("hidden"));
+
+      if (tabId === "supervision") {
+        tabBtnSupervision.className = "px-3 py-1 rounded-md font-medium text-slate-900 dark:text-white bg-white dark:bg-slate-700 shadow-sm transition";
+        tabPaneSupervision.classList.remove("hidden");
+      } else if (tabId === "preview") {
+        tabBtnPreview.className = "px-3 py-1 rounded-md font-medium text-slate-900 dark:text-white bg-white dark:bg-slate-700 shadow-sm transition";
+        tabPanePreview.classList.remove("hidden");
+      } else if (tabId === "fork") {
+        tabBtnFork.className = "px-3 py-1 rounded-md font-medium text-slate-900 dark:text-white bg-white dark:bg-slate-700 shadow-sm transition";
+        tabPaneFork.classList.remove("hidden");
+        if (state.cyInstance) {
+          setTimeout(() => state.cyInstance.resize(), 50);
+        }
+      }
+    }
+
+    function updateWordCount() {
+      const text = state.noteText.trim();
+      const words = text ? text.split(/\s+/).length : 0;
+      wordCountLabel.textContent = `${words} words`;
+    }
+
+    function setSupervisorStatus(isReady) {
+      if (isReady) {
+        supervisorStatusPill.className = "flex items-center space-x-2 text-xs px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50 font-medium";
+        supervisorStatusPill.querySelector("span").className = "w-2 h-2 rounded-full bg-emerald-500";
+        supervisorStatusText.textContent = "Live Supervisor Active";
+      } else {
+        supervisorStatusPill.className = "flex items-center space-x-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/50 font-medium";
+        supervisorStatusPill.querySelector("span").className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse";
+        supervisorStatusText.textContent = "Analyzing Note...";
+      }
+    }
+
+    async function loadTemplates() {
+      try {
+        const res = await fetch("/api/templates");
+        if (!res.ok) return;
+        const data = await res.json();
+        templateSelect._templatesData = data.templates;
+
+        templateSelect.innerHTML = `<option value="">Choose clinical case / scenario...</option>`;
+        data.templates.forEach(t => {
+          const opt = document.createElement("option");
+          opt.value = t.id;
+          opt.textContent = `${t.category} — ${t.title}`;
+          templateSelect.appendChild(opt);
+        });
+
+        // Preload first clinical case by default
+        if (data.templates.length > 0) {
+          const firstCase = data.templates[0];
+          templateSelect.value = firstCase.id;
+          noteTextarea.value = firstCase.text;
+          state.noteText = firstCase.text;
+          updateWordCount();
+          const hint = document.getElementById("template-hint-text");
+          if (hint) hint.textContent = firstCase.description || "";
+          evaluateNote();
+        }
+      } catch (err) {
+        console.error("Failed to load templates:", err);
+      }
+    }
+
+    async function evaluateNote() {
+      const text = state.noteText.trim();
+      if (!text) {
+        const emptyRes = {
+          note_text: "",
+          coder_readiness_score: 100,
+          readiness_grade: "A",
+          total_conditions: 0,
+          resolved_conditions: 0,
+          ambiguity_count: 0,
+          conditions: [],
+          ambiguities: [],
+          coder_preview: [],
+        };
+        state.supervisionResult = emptyRes;
+        renderResults(emptyRes);
+        setSupervisorStatus(true);
+        return emptyRes;
+      }
+
+      try {
+        const res = await fetch("/api/supervise", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note: text })
+        });
+
+        if (!res.ok) throw new Error(`Supervision failed: ${res.status}`);
+
+        const data = await res.json();
+        state.supervisionResult = data;
+        renderResults(data);
+        return data;
+      } catch (err) {
+        console.error("Supervision evaluation error:", err);
+        return null;
+      } finally {
+        setSupervisorStatus(true);
+      }
+    }
+
+    function renderResults(data) {
+      renderReadinessScore(data);
+      renderExtractedConditions(data.conditions || []);
+      renderAmbiguitiesList(data.ambiguities || []);
+      renderCoderPreview(data.coder_preview || []);
+
+      if (state.activeAmbiguity) {
+        const stillPresent = (data.ambiguities || []).find(a => a.id === state.activeAmbiguity.id);
+        if (!stillPresent && state.lastAcceptedFix) {
+          highlightAcceptedNodeInGraph(state.lastAcceptedFix);
+        }
+      }
+    }
+
+    function renderReadinessScore(data) {
+      const score = data.coder_readiness_score;
+      const grade = data.readiness_grade || "A";
+      readinessScoreNum.textContent = `${score}%`;
+      readinessGradeBadge.textContent = `Grade ${grade}`;
+      scoreProgressBar.style.width = `${score}%`;
+
+      const headerReadinessVal = document.getElementById("header-readiness-val");
+      if (headerReadinessVal) {
+        headerReadinessVal.textContent = `${score}%`;
+      }
+
+      if (score >= 90) {
+        readinessGradeBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800";
+        scoreProgressBar.className = "bg-emerald-500 h-1.5 rounded-full transition-all duration-500";
+        readinessIconPill.className = "w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center text-sm";
+        readinessIconPill.innerHTML = `<i class="fa-solid fa-check"></i>`;
+        readinessSummaryDesc.textContent = "All conditions are fully specified. Note is ready for medical coding.";
+        if (headerReadinessVal) headerReadinessVal.className = "font-bold text-emerald-600 dark:text-emerald-400";
+      } else if (score >= 75) {
+        readinessGradeBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-400 dark:border-amber-800";
+        scoreProgressBar.className = "bg-amber-500 h-1.5 rounded-full transition-all duration-500";
+        readinessIconPill.className = "w-8 h-8 rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center text-sm";
+        readinessIconPill.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i>`;
+        readinessSummaryDesc.textContent = "Minor documentation gap detected. Proposed enrichments available below.";
+        if (headerReadinessVal) headerReadinessVal.className = "font-bold text-amber-600 dark:text-amber-400";
+      } else {
+        readinessGradeBadge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/60 dark:text-red-400 dark:border-red-800";
+        scoreProgressBar.className = "bg-red-500 h-1.5 rounded-full transition-all duration-500";
+        readinessIconPill.className = "w-8 h-8 rounded-full bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-400 flex items-center justify-center text-sm";
+        readinessIconPill.innerHTML = `<i class="fa-solid fa-xmark"></i>`;
+        readinessSummaryDesc.textContent = "High coder confusion risk: Missing laterality, acuity, or etiology.";
+        if (headerReadinessVal) headerReadinessVal.className = "font-bold text-red-600 dark:text-red-400";
+      }
+
+      if (data.ambiguity_count > 0) {
+        ambiguityBadgeCount.textContent = data.ambiguity_count;
+        ambiguityBadgeCount.classList.remove("hidden");
+        ambiguitiesCountLabel.textContent = `${data.ambiguity_count} active`;
+      } else {
+        ambiguityBadgeCount.classList.add("hidden");
+        ambiguitiesCountLabel.textContent = "0 active";
+      }
+    }
+
+    function renderExtractedConditions(conditions) {
+      conditionsChipsContainer.innerHTML = "";
+      if (!conditions || conditions.length === 0) {
+        conditionsChipsContainer.innerHTML = `<span class="text-slate-400 dark:text-slate-600 text-[11px] italic">Type above to extract clinical conditions...</span>`;
+        return;
+      }
+
+      conditions.forEach(c => {
+        const chip = document.createElement("span");
+        if (c.has_ambiguity) {
+          chip.className = "inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/50";
+          chip.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-[9px] text-amber-500"></i><span>${c.condition_name}</span>`;
+        } else {
+          chip.className = "inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50";
+          chip.innerHTML = `<i class="fa-solid fa-check text-[9px] text-emerald-500"></i><span>${c.condition_name}</span><span class="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 ml-1 font-semibold">${c.resolved_code || ''}</span>`;
+        }
+        conditionsChipsContainer.appendChild(chip);
+      });
+    }
+
+    function renderAmbiguitiesList(ambiguities) {
+      ambiguitiesList.innerHTML = "";
+
+      if (!ambiguities || ambiguities.length === 0) {
+        emptyAmbiguitiesCard.classList.remove("hidden");
+        ambiguitiesList.appendChild(emptyAmbiguitiesCard);
+        return;
+      }
+
+      emptyAmbiguitiesCard.classList.add("hidden");
+
+      ambiguities.forEach(amb => {
+        const card = document.createElement("div");
+        card.className = "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-3 border-l-amber-500 rounded-xl p-3.5 space-y-2.5 shadow-xs transition";
+        card.id = `card-${amb.id}`;
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center space-x-1.5">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800/40">
+                  Missing ${amb.category}
+                </span>
+                <span class="text-xs font-semibold text-slate-900 dark:text-white">${amb.condition_name}</span>
+              </div>
+              <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                ${amb.reason}
+              </p>
+            </div>
+            <button class="btn-inspect-fork text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200/70 dark:bg-slate-800 dark:hover:bg-slate-700 transition flex items-center space-x-1 cursor-pointer" data-amb-id="${amb.id}">
+              <i class="fa-solid fa-code-fork text-[11px] text-amber-500"></i>
+              <span>Fork View</span>
+            </button>
+          </div>
+
+          <!-- Coder Perspective Note -->
+          <div class="bg-slate-50 dark:bg-slate-950/60 rounded-lg p-2 text-xs border border-slate-100 dark:border-slate-800/80">
+            <div class="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Anticipated Coder Query:</div>
+            <p class="text-slate-700 dark:text-slate-300 italic text-[11px] mt-0.5">"${amb.coder_query}"</p>
+          </div>
+
+          <!-- Proactive Enrichments -->
+          <div>
+            <div class="text-[10px] font-medium text-slate-400 dark:text-slate-500 mb-1">Accept proposed enrichment:</div>
+            <div class="flex flex-wrap gap-1.5" id="fixes-container-${amb.id}"></div>
+          </div>
+        `;
+
+        ambiguitiesList.appendChild(card);
+
+        // Populate enrichment chips
+        const fixesContainer = card.querySelector(`#fixes-container-${amb.id}`);
+        amb.quick_fixes.forEach(fix => {
+          const btn = document.createElement("button");
+          btn.className = "px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 dark:border-emerald-800/60 transition flex items-center space-x-1 cursor-pointer";
+          btn.innerHTML = `<i class="fa-solid fa-check text-[10px] text-emerald-600 dark:text-emerald-400"></i><span>${fix.label}</span>`;
+          btn.addEventListener("click", () => {
+            state.activeAmbiguity = amb;
+            applyQuickFix(fix);
+          });
+          fixesContainer.appendChild(btn);
+        });
+
+        // Fork inspector button
+        card.querySelector(".btn-inspect-fork").addEventListener("click", () => {
+          inspectTrajectoryFork(amb);
+        });
+      });
+    }
+
+    async function applyQuickFix(fix) {
+      const prevResult = state.supervisionResult;
+      const prevScore = prevResult ? prevResult.coder_readiness_score : 0;
+      const prevAmbCount = prevResult ? prevResult.ambiguity_count : 0;
+
+      state.lastAcceptedFix = fix;
+
+      let currentText = noteTextarea.value;
+      let replaced = false;
+
+      // Exact span replacement if matched
+      if (
+        fix.target_start >= 0 &&
+        fix.target_end <= currentText.length &&
+        fix.original_text &&
+        currentText.substring(fix.target_start, fix.target_end).toLowerCase() === fix.original_text.toLowerCase()
+      ) {
+        currentText = currentText.substring(0, fix.target_start) + fix.replacement_text + currentText.substring(fix.target_end);
+        replaced = true;
+      } else if (fix.original_text) {
+        // Regex word boundary search
+        const regex = new RegExp(`\\b${escapeRegExp(fix.original_text)}\\b`, 'i');
+        if (regex.test(currentText)) {
+          currentText = currentText.replace(regex, fix.replacement_text);
+          replaced = true;
+        }
+      }
+
+      if (!replaced && fix.target_start >= 0 && fix.target_end <= currentText.length) {
+        currentText = currentText.substring(0, fix.target_start) + fix.replacement_text + currentText.substring(fix.target_end);
+        replaced = true;
+      }
+
+      noteTextarea.value = currentText;
+      state.noteText = currentText;
+      updateWordCount();
+
+      // Editor flash feedback
+      noteTextarea.classList.add("enrichment-glow");
+      setTimeout(() => {
+        noteTextarea.classList.remove("enrichment-glow");
+      }, 1200);
+
+      // Re-evaluate note immediately
+      setSupervisorStatus(false);
+      const updatedResult = await evaluateNote();
+
+      if (updatedResult) {
+        showEnrichmentToast(fix, prevScore, prevAmbCount, updatedResult);
+      }
+    }
+
+    function showEnrichmentToast(fix, prevScore, prevAmbCount, newResult) {
+      const newScore = newResult.coder_readiness_score;
+      const scoreDelta = newScore - prevScore;
+      const ambResolved = prevAmbCount - newResult.ambiguity_count;
+
+      toastScoreDelta.textContent = scoreDelta >= 0 ? `+${scoreDelta}% Score` : `${scoreDelta}%`;
+
+      if (newResult.ambiguity_count === 0) {
+        toastConfusionMsg.textContent = `All ambiguities resolved (100% Coder Ready). '${fix.branch_node_label || fix.label}' enables direct ICD-10 coding.`;
+      } else if (ambResolved > 0) {
+        toastConfusionMsg.textContent = `Ambiguity resolved for ${fix.original_text}. Remaining gaps: ${newResult.ambiguity_count}.`;
+      } else {
+        toastConfusionMsg.textContent = `Node enrichment applied. Note re-evaluated by supervisor.`;
+      }
+
+      enrichmentToast.classList.remove("hidden");
+      clearTimeout(state._toastTimeout);
+      state._toastTimeout = setTimeout(() => {
+        enrichmentToast.classList.add("hidden");
+      }, 6000);
+    }
+
+    function renderCoderPreview(previewItems) {
+      coderPreviewContainer.innerHTML = "";
+      if (!previewItems || previewItems.length === 0) {
+        coderPreviewContainer.innerHTML = `<div class="text-xs text-slate-400 dark:text-slate-600 italic text-center py-8">Draft a clinical note to preview mapped diagnosis codes.</div>`;
+        return;
+      }
+
+      const table = document.createElement("div");
+      table.className = "border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900";
+      
+      let rowsHtml = `
+        <div class="grid grid-cols-12 bg-slate-50 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+          <div class="col-span-3">Code</div>
+          <div class="col-span-6">Description</div>
+          <div class="col-span-3 text-right">Status</div>
+        </div>
+      `;
+
+      previewItems.forEach(item => {
+        const statusBadge = item.is_specific
+          ? `<span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-semibold">Specific</span>`
+          : `<span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] font-semibold">Unspecified</span>`;
+
+        rowsHtml += `
+          <div class="grid grid-cols-12 px-3 py-2.5 text-xs border-b border-slate-100 dark:border-slate-800/60 items-center hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+            <div class="col-span-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">${item.code}</div>
+            <div class="col-span-6 text-slate-700 dark:text-slate-300 pr-2">
+              <div>${item.description}</div>
+            </div>
+            <div class="col-span-3 text-right">${statusBadge}</div>
+          </div>
+        `;
+      });
+
+      table.innerHTML = rowsHtml;
+      coderPreviewContainer.appendChild(table);
+    }
+
+    async function inspectTrajectoryFork(ambiguity) {
+      state.activeAmbiguity = ambiguity;
+      switchTab("fork");
+      document.getElementById("fork-inspector-title").textContent = `Branch Fork: ${ambiguity.condition_name}`;
+      document.getElementById("fork-inspector-subtitle").textContent = `${ambiguity.reason}`;
+      document.getElementById("fork-canvas-placeholder").classList.add("hidden");
+      forkNodeEnrichmentBar.classList.add("hidden");
+
+      const tids = ambiguity.trajectory_ids.join(",");
+      try {
+        const res = await fetch(`/api/fork-subgraph?tids=${encodeURIComponent(tids)}&fork_node_id=${encodeURIComponent(ambiguity.fork_node_id || '')}`);
+        if (!res.ok) throw new Error("Failed to fetch fork subgraph");
+        const graphData = await res.json();
+        renderCytoscapeForkGraph(graphData, ambiguity);
+      } catch (err) {
+        console.error("Fork graph render error:", err);
+      }
+    }
+
+    function renderCytoscapeForkGraph(graphData, ambiguity) {
+      const container = document.getElementById("cy-fork-canvas");
+      if (state.cyInstance) {
+        state.cyInstance.destroy();
+      }
+
+      const isDark = document.documentElement.classList.contains("dark");
+
+      const elements = [
+        ...graphData.nodes.map(n => ({
+          data: {
+            ...n.data,
+            label: n.data.title || n.data.label || n.data.id,
+            isCode: n.data.tag === 'code' || n.data.id.startsWith('code:'),
+            isRoot: n.data.id === 'n_0',
+            isFork: n.data.id === ambiguity.fork_node_id,
+          }
+        })),
+        ...graphData.edges.map(e => ({
+          data: {
+            ...e.data,
+            label: e.data.label || ''
+          }
+        }))
+      ];
+
+      state.cyInstance = cytoscape({
+        container: container,
+        elements: elements,
+        style: getCytoscapeStyles(isDark),
+        layout: {
+          name: 'dagre',
+          rankDir: 'LR',
+          nodeSep: 20,
+          rankSep: 40,
+          padding: 20,
+        }
+      });
+
+      state.cyInstance.on('tap', 'node', function(evt) {
+        const node = evt.target;
+        const data = node.data();
+        handleCytoscapeNodeTap(data, ambiguity);
+      });
+    }
+
+    function getCytoscapeStyles(isDark) {
+      return [
+        {
+          selector: 'node',
+          style: {
+            'background-color': isDark ? '#1e293b' : '#ffffff',
+            'border-width': 1,
+            'border-color': isDark ? '#475569' : '#cbd5e1',
+            'color': isDark ? '#f1f5f9' : '#0f172a',
+            'font-size': '10px',
+            'font-family': 'Inter, sans-serif',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '110px',
+            'width': 'label',
+            'height': 'label',
+            'padding': '6px',
+            'shape': 'round-rectangle',
+            'cursor': 'pointer',
+          }
+        },
+        {
+          selector: 'node[?isCode]',
+          style: {
+            'background-color': isDark ? '#064e3b' : '#ecfdf5',
+            'border-color': '#10b981',
+            'border-width': 1.5,
+            'color': isDark ? '#6ee7b7' : '#047857',
+            'font-weight': '600',
+          }
+        },
+        {
+          selector: 'node[?isFork]',
+          style: {
+            'background-color': isDark ? '#78350f' : '#fef3c7',
+            'border-color': '#f59e0b',
+            'border-width': 2,
+            'color': isDark ? '#fde68a' : '#b45309',
+            'font-weight': '600',
+          }
+        },
+        {
+          selector: 'node[?isRoot]',
+          style: {
+            'background-color': isDark ? '#0f172a' : '#f8fafc',
+            'border-color': '#0284c7',
+            'color': '#0284c7',
+          }
+        },
+        {
+          selector: 'node:selected',
+          style: {
+            'border-color': '#0284c7',
+            'border-width': 2.5,
+          }
+        },
+        {
+          selector: '.accepted-enrichment-node',
+          style: {
+            'background-color': '#16a34a',
+            'border-color': '#22c55e',
+            'border-width': 2.5,
+            'color': '#ffffff',
+            'font-weight': 'bold',
+          }
+        },
+        {
+          selector: '.dimmed-branch',
+          style: {
+            'opacity': 0.3,
+          }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 1.2,
+            'line-color': isDark ? '#475569' : '#cbd5e1',
+            'target-arrow-color': isDark ? '#475569' : '#cbd5e1',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            'arrow-scale': 0.7,
+          }
+        },
+        {
+          selector: 'edge[edge_type = "CODES_TO"]',
+          style: {
+            'line-color': '#10b981',
+            'target-arrow-color': '#10b981',
+            'width': 1.5,
+          }
+        }
+      ];
+    }
+
+    function updateCytoscapeTheme(isDark) {
+      if (!state.cyInstance) return;
+      state.cyInstance.style(getCytoscapeStyles(isDark));
+    }
+
+    function handleCytoscapeNodeTap(nodeData, ambiguity) {
+      if (!ambiguity || !ambiguity.quick_fixes) return;
+
+      const nodeTitle = (nodeData.title || nodeData.label || "").toLowerCase();
+      const nodeId = (nodeData.id || "").toLowerCase();
+
+      let matchedFix = ambiguity.quick_fixes.find(f => {
+        const branchLabel = (f.branch_node_label || "").toLowerCase();
+        const branchCode = (f.branch_code || "").toLowerCase();
+        return (
+          branchLabel && nodeTitle.includes(branchLabel) ||
+          branchCode && (nodeTitle.includes(branchCode) || nodeId.includes(branchCode))
+        );
+      });
+
+      if (!matchedFix && nodeData.isCode) {
+        matchedFix = ambiguity.quick_fixes.find(f => {
+          const codeVal = (f.branch_code || "").toLowerCase();
+          return codeVal && (nodeTitle.includes(codeVal) || nodeId.includes(codeVal));
+        });
+      }
+
+      if (matchedFix) {
+        state.selectedNodeFix = matchedFix;
+        selectedNodeBadge.textContent = nodeData.title || nodeData.label || matchedFix.branch_node_label;
+        selectedNodeCodeBadge.textContent = matchedFix.branch_code ? `ICD-10: ${matchedFix.branch_code}` : 'Branch Selected';
+        proposedEnrichmentPreview.textContent = `Replace "${matchedFix.original_text || ambiguity.condition_name}" with "${matchedFix.replacement_text}"`;
+        forkNodeEnrichmentBar.classList.remove("hidden");
+      } else {
+        state.selectedNodeFix = null;
+        selectedNodeBadge.textContent = nodeData.title || nodeData.label;
+        selectedNodeCodeBadge.textContent = nodeData.isRoot ? 'Index Root' : (nodeData.isFork ? 'Branch Fork' : 'Term Node');
+        proposedEnrichmentPreview.textContent = `Hierarchy: ${nodeData.breadcrumb || nodeData.title}. Select a downstream branch node (e.g. Right, Left, Acute) to apply an enrichment.`;
+        forkNodeEnrichmentBar.classList.remove("hidden");
+      }
+    }
+
+    function highlightAcceptedNodeInGraph(fix) {
+      if (!state.cyInstance) return;
+
+      state.cyInstance.batch(() => {
+        state.cyInstance.nodes().forEach(node => {
+          const data = node.data();
+          const title = (data.title || data.label || "").toLowerCase();
+          const id = (data.id || "").toLowerCase();
+          const branchLabel = (fix.branch_node_label || "").toLowerCase();
+          const branchCode = (fix.branch_code || "").toLowerCase();
+
+          const isMatch = (
+            branchLabel && title.includes(branchLabel) ||
+            branchCode && (title.includes(branchCode) || id.includes(branchCode))
+          );
+
+          if (isMatch) {
+            node.addClass("accepted-enrichment-node");
+            node.removeClass("dimmed-branch");
+          } else if (!data.isRoot && !data.isFork) {
+            node.addClass("dimmed-branch");
+            node.removeClass("accepted-enrichment-node");
+          }
+        });
+      });
+    }
+  </script>
+</body>
+</html>
