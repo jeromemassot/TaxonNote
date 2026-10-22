@@ -281,54 +281,58 @@
       <div id="tab-pane-fork" class="hidden flex-1 flex flex-col p-4 min-h-0">
         
         <!-- Header & Action Bar -->
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t-xl px-3.5 py-2.5 flex items-center justify-between shrink-0">
-          <div>
-            <div id="fork-inspector-title" class="text-xs font-semibold text-slate-800 dark:text-slate-200">Trajectory Branch Inspector</div>
-            <div id="fork-inspector-subtitle" class="text-[11px] text-slate-400 dark:text-slate-500">Tap any branch node below to accept enrichment.</div>
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t-xl px-3.5 py-2.5 flex items-center justify-between shrink-0 gap-2">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center space-x-2">
+              <span id="fork-inspector-title" class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">Trajectory Branch Inspector</span>
+            </div>
+            <div id="fork-inspector-subtitle" class="text-[11px] text-slate-400 dark:text-slate-500 truncate">Tap any branch node below to accept enrichment.</div>
           </div>
-          <div class="flex items-center space-x-1">
-            <button id="btn-fit-fork-graph" class="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded text-xs" title="Fit graph">
+          <div class="flex items-center space-x-1.5 shrink-0">
+            <select id="fork-ambiguity-selector" class="hidden bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-medium rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer max-w-[170px] truncate" title="Switch active fork">
+            </select>
+            <button id="btn-fit-fork-graph" class="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-xs transition cursor-pointer" title="Fit graph in view">
               <i class="fa-solid fa-compress"></i>
             </button>
-            <button id="btn-reset-fork-graph" class="p-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded text-xs" title="Reset layout">
+            <button id="btn-reset-fork-graph" class="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-xs transition cursor-pointer" title="Reset layout">
               <i class="fa-solid fa-arrows-rotate"></i>
             </button>
           </div>
         </div>
 
         <!-- Cytoscape Canvas Container -->
-        <div class="flex-1 bg-white dark:bg-slate-950 border-x border-slate-200 dark:border-slate-800 relative min-h-[260px]">
+        <div class="flex-1 bg-white dark:bg-slate-950 border border-t-0 border-slate-200 dark:border-slate-800 relative min-h-[300px] overflow-hidden rounded-b-xl">
           <div id="cy-fork-canvas" class="w-full h-full absolute inset-0"></div>
-          <div id="fork-canvas-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-slate-400 dark:text-slate-600">
-            <i class="fa-solid fa-diagram-project text-2xl mb-2"></i>
-            <p class="text-xs max-w-xs">Select "View Fork" on an ambiguity card to visually inspect the ICD-10 branching tree.</p>
+          <div id="fork-canvas-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-slate-400 dark:text-slate-600 bg-white/90 dark:bg-slate-950/90 z-10">
+            <i class="fa-solid fa-diagram-project text-2xl mb-2 text-slate-300 dark:text-slate-700"></i>
+            <p class="text-xs max-w-xs font-medium">Select "Fork View" on an ambiguity card to visually inspect the ICD-10 branching tree.</p>
           </div>
-        </div>
 
-        <!-- Interactive Node Selection Drawer -->
-        <div id="fork-node-enrichment-bar" class="hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-b-xl p-3 shadow-md space-y-2 shrink-0">
-          <div class="flex items-center justify-between text-xs">
-            <div class="flex items-center space-x-2">
-              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Selected Node:</span>
-              <span id="selected-node-badge" class="font-semibold text-slate-900 dark:text-white">Right</span>
+          <!-- Interactive Node Selection Drawer (overlay at bottom of canvas) -->
+          <div id="fork-node-enrichment-bar" class="hidden absolute bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-3 shadow-lg space-y-2 z-20 transition-all">
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center space-x-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Selected Node:</span>
+                <span id="selected-node-badge" class="font-semibold text-slate-900 dark:text-white">Right</span>
+              </div>
+              <span id="selected-node-code-badge" class="font-mono text-emerald-600 dark:text-emerald-400 text-xs font-semibold">M25.561</span>
             </div>
-            <span id="selected-node-code-badge" class="font-mono text-emerald-600 dark:text-emerald-400 text-xs font-semibold">M25.561</span>
-          </div>
 
-          <div class="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950/60 p-2 rounded-lg border border-slate-100 dark:border-slate-800/80">
-            <span class="text-[10px] text-slate-400 uppercase font-medium">Proposed Note Enrichment:</span>
-            <div id="proposed-enrichment-preview" class="font-medium text-slate-800 dark:text-slate-200 mt-0.5">Replace "knee pain" with "right knee pain"</div>
-          </div>
+            <div class="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950/70 p-2 rounded-lg border border-slate-100 dark:border-slate-800/80">
+              <span class="text-[10px] text-slate-400 uppercase font-medium">Proposed Note Enrichment:</span>
+              <div id="proposed-enrichment-preview" class="font-medium text-slate-800 dark:text-slate-200 mt-0.5">Replace "knee pain" with "right knee pain"</div>
+            </div>
 
-          <div class="flex items-center justify-end space-x-2 pt-0.5">
-            <button id="btn-cancel-node-enrichment" class="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
-              Dismiss
-            </button>
-            <button id="btn-accept-node-enrichment" class="px-3.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition flex items-center space-x-1.5 cursor-pointer">
-              <i class="fa-solid fa-check text-[10px]"></i>
-              <span>Accept Enrichment</span>
-            </button>
+            <div class="flex items-center justify-end space-x-2 pt-0.5">
+              <button id="btn-cancel-node-enrichment" class="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer">
+                Dismiss
+              </button>
+              <button id="btn-accept-node-enrichment" class="px-3.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition flex items-center space-x-1.5 cursor-pointer">
+                <i class="fa-solid fa-check text-[10px]"></i>
+                <span>Accept Enrichment</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -379,6 +383,7 @@
 
     // Fork Drawer Elements
     const forkNodeEnrichmentBar = document.getElementById("fork-node-enrichment-bar");
+    const forkAmbiguitySelector = document.getElementById("fork-ambiguity-selector");
     const selectedNodeBadge = document.getElementById("selected-node-badge");
     const selectedNodeCodeBadge = document.getElementById("selected-node-code-badge");
     const proposedEnrichmentPreview = document.getElementById("proposed-enrichment-preview");
@@ -525,13 +530,37 @@
       tabBtnPreview.addEventListener("click", () => switchTab("preview"));
       tabBtnFork.addEventListener("click", () => switchTab("fork"));
 
-      // Cytoscape buttons
+      // Cytoscape buttons & fork selector
+      forkAmbiguitySelector.addEventListener("change", (e) => {
+        const ambId = e.target.value;
+        if (!ambId || !state.supervisionResult || !state.supervisionResult.ambiguities) return;
+        const selectedAmb = state.supervisionResult.ambiguities.find(a => a.id === ambId);
+        if (selectedAmb) {
+          inspectTrajectoryFork(selectedAmb);
+        }
+      });
+
       document.getElementById("btn-fit-fork-graph").addEventListener("click", () => {
-        if (state.cyInstance) state.cyInstance.fit(undefined, 25);
+        if (state.cyInstance) {
+          state.cyInstance.resize();
+          state.cyInstance.fit(undefined, 25);
+        }
       });
       document.getElementById("btn-reset-fork-graph").addEventListener("click", () => {
         if (state.cyInstance) {
-          state.cyInstance.layout({ name: "dagre", rankDir: "LR", animate: true, animationDuration: 300 }).run();
+          state.cyInstance.resize();
+          state.cyInstance.layout({
+            name: "dagre",
+            rankDir: "TB",
+            nodeSep: 25,
+            rankSep: 35,
+            padding: 25,
+            animate: true,
+            animationDuration: 300,
+            stop: function() {
+              if (state.cyInstance) state.cyInstance.fit(undefined, 25);
+            }
+          }).run();
         }
       });
 
@@ -573,8 +602,15 @@
       } else if (tabId === "fork") {
         tabBtnFork.className = "px-3 py-1 rounded-md font-medium text-slate-900 dark:text-white bg-white dark:bg-slate-700 shadow-sm transition";
         tabPaneFork.classList.remove("hidden");
-        if (state.cyInstance) {
-          setTimeout(() => state.cyInstance.resize(), 50);
+        
+        // Auto-inspect first active ambiguity if none is currently selected
+        if (!state.activeAmbiguity && state.supervisionResult && state.supervisionResult.ambiguities && state.supervisionResult.ambiguities.length > 0) {
+          inspectTrajectoryFork(state.supervisionResult.ambiguities[0]);
+        } else if (state.cyInstance) {
+          setTimeout(() => {
+            state.cyInstance.resize();
+            state.cyInstance.fit(undefined, 25);
+          }, 80);
         }
       }
     }
@@ -674,13 +710,41 @@
       renderExtractedConditions(data.conditions || []);
       renderAmbiguitiesList(data.ambiguities || []);
       renderCoderPreview(data.coder_preview || []);
+      updateForkAmbiguitySelector(data.ambiguities || []);
 
       if (state.activeAmbiguity) {
         const stillPresent = (data.ambiguities || []).find(a => a.id === state.activeAmbiguity.id);
-        if (!stillPresent && state.lastAcceptedFix) {
-          highlightAcceptedNodeInGraph(state.lastAcceptedFix);
+        if (!stillPresent) {
+          if (state.lastAcceptedFix) {
+            highlightAcceptedNodeInGraph(state.lastAcceptedFix);
+          }
+          if (!data.ambiguities || data.ambiguities.length === 0) {
+            document.getElementById("fork-inspector-title").textContent = "All Gaps Resolved";
+            document.getElementById("fork-inspector-subtitle").textContent = "100% Coder Ready. No branching ambiguities remaining.";
+          }
         }
       }
+    }
+
+    function updateForkAmbiguitySelector(ambiguities) {
+      if (!forkAmbiguitySelector) return;
+      if (!ambiguities || ambiguities.length === 0) {
+        forkAmbiguitySelector.innerHTML = `<option value="">No active forks</option>`;
+        forkAmbiguitySelector.classList.add("hidden");
+        return;
+      }
+
+      forkAmbiguitySelector.innerHTML = "";
+      ambiguities.forEach(amb => {
+        const opt = document.createElement("option");
+        opt.value = amb.id;
+        opt.textContent = `${amb.condition_name} (${amb.category})`;
+        if (state.activeAmbiguity && state.activeAmbiguity.id === amb.id) {
+          opt.selected = true;
+        }
+        forkAmbiguitySelector.appendChild(opt);
+      });
+      forkAmbiguitySelector.classList.remove("hidden");
     }
 
     function renderReadinessScore(data) {
@@ -938,6 +1002,10 @@
       document.getElementById("fork-canvas-placeholder").classList.add("hidden");
       forkNodeEnrichmentBar.classList.add("hidden");
 
+      if (forkAmbiguitySelector) {
+        forkAmbiguitySelector.value = ambiguity.id;
+      }
+
       const tids = ambiguity.trajectory_ids.join(",");
       try {
         const res = await fetch(`/api/fork-subgraph?tids=${encodeURIComponent(tids)}&fork_node_id=${encodeURIComponent(ambiguity.fork_node_id || '')}`);
@@ -962,7 +1030,7 @@
           data: {
             ...n.data,
             label: n.data.title || n.data.label || n.data.id,
-            isCode: n.data.tag === 'code' || n.data.id.startsWith('code:'),
+            isCode: n.data.tag === 'code' || (n.data.id && n.data.id.startsWith('code:')),
             isRoot: n.data.id === 'n_0',
             isFork: n.data.id === ambiguity.fork_node_id,
           }
@@ -981,12 +1049,25 @@
         style: getCytoscapeStyles(isDark),
         layout: {
           name: 'dagre',
-          rankDir: 'LR',
-          nodeSep: 20,
-          rankSep: 40,
-          padding: 20,
+          rankDir: 'TB',
+          nodeSep: 25,
+          rankSep: 35,
+          padding: 25,
+          fit: true,
+          stop: function() {
+            if (state.cyInstance) {
+              state.cyInstance.fit(undefined, 25);
+            }
+          }
         }
       });
+
+      setTimeout(() => {
+        if (state.cyInstance) {
+          state.cyInstance.resize();
+          state.cyInstance.fit(undefined, 25);
+        }
+      }, 80);
 
       state.cyInstance.on('tap', 'node', function(evt) {
         const node = evt.target;
@@ -1000,12 +1081,13 @@
         {
           selector: 'node',
           style: {
+            'label': 'data(label)',
             'background-color': isDark ? '#1e293b' : '#ffffff',
-            'border-width': 1,
+            'border-width': 1.5,
             'border-color': isDark ? '#475569' : '#cbd5e1',
             'color': isDark ? '#f1f5f9' : '#0f172a',
             'font-size': '10px',
-            'font-family': 'Inter, sans-serif',
+            'font-family': 'Inter, system-ui, sans-serif',
             'text-valign': 'center',
             'text-halign': 'center',
             'text-wrap': 'wrap',
@@ -1022,7 +1104,7 @@
           style: {
             'background-color': isDark ? '#064e3b' : '#ecfdf5',
             'border-color': '#10b981',
-            'border-width': 1.5,
+            'border-width': 2,
             'color': isDark ? '#6ee7b7' : '#047857',
             'font-weight': '600',
           }
@@ -1043,6 +1125,7 @@
             'background-color': isDark ? '#0f172a' : '#f8fafc',
             'border-color': '#0284c7',
             'color': '#0284c7',
+            'font-weight': '600',
           }
         },
         {
@@ -1065,18 +1148,18 @@
         {
           selector: '.dimmed-branch',
           style: {
-            'opacity': 0.3,
+            'opacity': 0.35,
           }
         },
         {
           selector: 'edge',
           style: {
-            'width': 1.2,
+            'width': 1.5,
             'line-color': isDark ? '#475569' : '#cbd5e1',
             'target-arrow-color': isDark ? '#475569' : '#cbd5e1',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
-            'arrow-scale': 0.7,
+            'arrow-scale': 0.8,
           }
         },
         {
@@ -1084,7 +1167,7 @@
           style: {
             'line-color': '#10b981',
             'target-arrow-color': '#10b981',
-            'width': 1.5,
+            'width': 2,
           }
         }
       ];
@@ -1092,7 +1175,13 @@
 
     function updateCytoscapeTheme(isDark) {
       if (!state.cyInstance) return;
-      state.cyInstance.style(getCytoscapeStyles(isDark));
+      try {
+        state.cyInstance.style().clear().fromJson(getCytoscapeStyles(isDark)).update();
+      } catch (err) {
+        if (state.activeAmbiguity) {
+          inspectTrajectoryFork(state.activeAmbiguity);
+        }
+      }
     }
 
     function handleCytoscapeNodeTap(nodeData, ambiguity) {
