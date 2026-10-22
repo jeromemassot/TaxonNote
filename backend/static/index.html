@@ -41,6 +41,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
 
+  <!-- Marked.js & DOMPurify for Markdown parsing and sanitization -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+
   <style>
     /* Theme transition */
     html {
@@ -57,6 +61,77 @@
     ::-webkit-scrollbar-thumb {
       background: rgba(148, 163, 184, 0.4);
       border-radius: 4px;
+    }
+    .dark ::-webkit-scrollbar-thumb {
+      background: rgba(71, 85, 105, 0.5);
+    }
+    /* Editor highlight flash on enrichment */
+    @keyframes pulse-emerald {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+      70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+    .enrichment-glow {
+      animation: pulse-emerald 1.2s ease-out;
+    }
+
+    /* Markdown Rendered Preview Styling */
+    .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+      font-weight: 700;
+      color: inherit;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    .markdown-body h1 { font-size: 1.35rem; border-bottom: 1px solid rgba(148, 163, 184, 0.25); padding-bottom: 0.35rem; }
+    .markdown-body h2 { font-size: 1.15rem; border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding-bottom: 0.25rem; }
+    .markdown-body h3 { font-size: 1.05rem; }
+    .markdown-body p { margin-bottom: 0.75rem; }
+    .markdown-body ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+    .markdown-body ol { list-style-type: decimal; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+    .markdown-body li { margin-bottom: 0.25rem; }
+    .markdown-body strong { font-weight: 600; color: inherit; }
+    .markdown-body blockquote {
+      border-left: 3px solid #10b981;
+      padding-left: 0.75rem;
+      color: #64748b;
+      margin-bottom: 0.75rem;
+      font-style: italic;
+    }
+    .dark .markdown-body blockquote {
+      color: #94a3b8;
+    }
+    .markdown-body code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85em;
+      padding: 0.15rem 0.35rem;
+      border-radius: 0.25rem;
+      background: rgba(148, 163, 184, 0.15);
+    }
+    .markdown-body pre {
+      background: rgba(148, 163, 184, 0.1);
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      margin-bottom: 0.75rem;
+    }
+    .markdown-body hr {
+      border: 0;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      margin: 1rem 0;
+    }
+    .markdown-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 0.75rem;
+    }
+    .markdown-body th, .markdown-body td {
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      padding: 0.4rem 0.6rem;
+      text-align: left;
+    }
+    .markdown-body th {
+      background: rgba(148, 163, 184, 0.1);
+      font-weight: 600;
     }
     .dark ::-webkit-scrollbar-thumb {
       background: rgba(71, 85, 105, 0.5);
@@ -173,8 +248,22 @@
           <span id="template-hint-text" class="hidden 2xl:inline-block text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-xs italic"></span>
         </div>
 
-        <!-- Editor Metadata & Actions -->
-        <div class="flex items-center space-x-3 text-xs text-slate-400 dark:text-slate-500 shrink-0">
+        <!-- Editor Mode Switcher & Actions -->
+        <div class="flex items-center space-x-2.5 text-xs text-slate-400 dark:text-slate-500 shrink-0">
+          
+          <!-- Mode Switcher: Raw (Edit) / Markdown (Preview) -->
+          <div class="inline-flex bg-slate-200/70 dark:bg-slate-800 p-0.5 rounded-lg text-xs" role="tablist">
+            <button id="editor-mode-raw" class="px-2.5 py-1 rounded-md font-semibold text-slate-900 dark:text-white bg-white dark:bg-slate-700 shadow-xs transition flex items-center space-x-1.5 cursor-pointer" title="Direct raw text editing">
+              <i class="fa-solid fa-pen text-[10px]"></i>
+              <span>Edit</span>
+            </button>
+            <button id="editor-mode-markdown" class="px-2.5 py-1 rounded-md font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition flex items-center space-x-1.5 cursor-pointer" title="Rendered Markdown view">
+              <i class="fa-brands fa-markdown text-xs text-blue-500"></i>
+              <span>Preview</span>
+              <span id="markdown-detected-badge" class="hidden px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300">MD</span>
+            </button>
+          </div>
+
           <span id="word-count-label" class="px-2 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium text-[11px]">0 words</span>
           <button id="btn-clear" class="hover:text-slate-900 dark:hover:text-white px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/80 transition cursor-pointer" title="Clear note text">
             <i class="fa-solid fa-rotate-left mr-1.5"></i>Clear
@@ -185,14 +274,23 @@
         </div>
       </div>
 
-      <!-- Editor Textarea -->
-      <div class="flex-1 p-5 flex flex-col min-h-0">
+      <!-- Editor & Markdown Preview Container -->
+      <div class="flex-1 p-5 flex flex-col min-h-0 relative overflow-hidden">
+        <!-- Direct Textarea -->
         <textarea
           id="clinical-note-input"
           class="w-full flex-1 bg-transparent text-slate-900 dark:text-slate-100 text-[14px] leading-relaxed resize-none focus:outline-none placeholder:text-slate-300 dark:placeholder:text-slate-700 font-sans"
-          placeholder="Start drafting the clinical note here... TaxonNote continuously checks that conditions have the required laterality, acuity, and clinical specificity for unambiguous ICD-10-CM coding."
+          placeholder="Start drafting or paste clinical note here (supports plain text and Markdown)... TaxonNote continuously checks that conditions have the required laterality, acuity, and clinical specificity for unambiguous ICD-10-CM coding."
           spellcheck="false"
         ></textarea>
+
+        <!-- Markdown Rendered Surface (shown when in preview mode) -->
+        <div
+          id="clinical-note-preview"
+          class="hidden w-full flex-1 overflow-y-auto text-slate-900 dark:text-slate-100 text-[14px] leading-relaxed markdown-body focus:outline-none select-text"
+          tabindex="0"
+          title="Double-click to return to Edit mode"
+        ></div>
       </div>
 
       <!-- Subtle Extracted Tags Tray -->
@@ -355,10 +453,15 @@
       cyInstance: null,
       lastAcceptedFix: null,
       currentTheme: "system", // 'light' | 'dark' | 'system'
+      editorMode: "raw", // 'raw' | 'markdown'
     };
 
     // DOM Elements
     const noteTextarea = document.getElementById("clinical-note-input");
+    const editorModeRaw = document.getElementById("editor-mode-raw");
+    const editorModeMarkdown = document.getElementById("editor-mode-markdown");
+    const notePreview = document.getElementById("clinical-note-preview");
+    const markdownDetectedBadge = document.getElementById("markdown-detected-badge");
     const templateSelect = document.getElementById("template-select");
     const supervisorStatusPill = document.getElementById("supervisor-status-pill");
     const supervisorStatusText = document.getElementById("supervisor-status-text");
@@ -465,16 +568,178 @@
       }
     }
 
+    // Editor Mode Management (Raw Text vs Rendered Markdown)
+    function setEditorMode(mode) {
+      state.editorMode = mode;
+      const activeClass = "px-2.5 py-1 rounded-md font-semibold text-slate-900 dark:text-white bg-white dark:bg-slate-700 shadow-xs transition flex items-center space-x-1.5 cursor-pointer";
+      const inactiveClass = "px-2.5 py-1 rounded-md font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition flex items-center space-x-1.5 cursor-pointer";
+
+      if (mode === "raw") {
+        editorModeRaw.className = activeClass;
+        editorModeMarkdown.className = inactiveClass;
+        noteTextarea.classList.remove("hidden");
+        notePreview.classList.add("hidden");
+        noteTextarea.focus();
+      } else {
+        editorModeRaw.className = inactiveClass;
+        editorModeMarkdown.className = activeClass;
+        updateMarkdownPreview();
+        noteTextarea.classList.add("hidden");
+        notePreview.classList.remove("hidden");
+      }
+    }
+
+    function updateMarkdownPreview() {
+      if (!notePreview) return;
+      const text = state.noteText.trim();
+      if (!text) {
+        notePreview.innerHTML = `<div class="text-slate-400 dark:text-slate-600 italic text-[13px] pt-4">No content to preview. Start typing or paste plain text or Markdown in Edit mode.</div>`;
+        return;
+      }
+      try {
+        const rawHtml = (typeof marked !== "undefined" && typeof marked.parse === "function") 
+          ? marked.parse(text) 
+          : text.replace(/\n/g, "<br>");
+        const cleanHtml = (typeof DOMPurify !== "undefined" && typeof DOMPurify.sanitize === "function")
+          ? DOMPurify.sanitize(rawHtml)
+          : rawHtml;
+        notePreview.innerHTML = cleanHtml;
+      } catch (err) {
+        notePreview.textContent = text;
+      }
+    }
+
+    function checkMarkdownPresence(text) {
+      if (!markdownDetectedBadge) return;
+      const isMd = /(^#{1,6}\s|\*\*|__|\*|_|\n\s*[-*+]\s|\n\s*\d+\.\s|```|`|> )/m.test(text || "");
+      if (isMd) {
+        markdownDetectedBadge.classList.remove("hidden");
+      } else {
+        markdownDetectedBadge.classList.add("hidden");
+      }
+    }
+
+    function convertHtmlToMarkdown(html) {
+      if (!html) return "";
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+
+        // Remove script, style, meta
+        doc.querySelectorAll("script, style, meta, link").forEach(el => el.remove());
+
+        // Convert headings
+        for (let i = 1; i <= 6; i++) {
+          doc.querySelectorAll(`h${i}`).forEach(h => {
+            const hashes = "#".repeat(i);
+            const content = h.textContent.trim();
+            h.replaceWith(`\n\n${hashes} ${content}\n\n`);
+          });
+        }
+
+        // Convert bold / strong
+        doc.querySelectorAll("strong, b").forEach(b => {
+          const content = b.textContent.trim();
+          if (content) b.replaceWith(` **${content}** `);
+        });
+
+        // Convert italic / em
+        doc.querySelectorAll("em, i").forEach(i => {
+          const content = i.textContent.trim();
+          if (content) i.replaceWith(` *${content}* `);
+        });
+
+        // Convert list items
+        doc.querySelectorAll("li").forEach(li => {
+          const content = li.textContent.trim();
+          li.replaceWith(`\n- ${content}`);
+        });
+
+        // Convert paragraphs
+        doc.querySelectorAll("p").forEach(p => {
+          const content = p.textContent.trim();
+          p.replaceWith(`\n\n${content}\n\n`);
+        });
+
+        // Convert line breaks
+        doc.querySelectorAll("br").forEach(br => {
+          br.replaceWith("\n");
+        });
+
+        // Convert blockquotes
+        doc.querySelectorAll("blockquote").forEach(bq => {
+          const lines = bq.textContent.trim().split("\n");
+          bq.replaceWith(`\n\n${lines.map(l => `> ${l}`).join("\n")}\n\n`);
+        });
+
+        const raw = doc.body.textContent || "";
+        return raw.replace(/\n{3,}/g, "\n\n").trim();
+      } catch (err) {
+        return "";
+      }
+    }
+
     function setupEventListeners() {
       // Theme switcher buttons
       themeBtnLight.addEventListener("click", () => setTheme("light"));
       themeBtnSystem.addEventListener("click", () => setTheme("system"));
       themeBtnDark.addEventListener("click", () => setTheme("dark"));
 
+      // Editor Mode Toggle (Edit / Preview)
+      editorModeRaw.addEventListener("click", () => setEditorMode("raw"));
+      editorModeMarkdown.addEventListener("click", () => setEditorMode("markdown"));
+
+      // Double click on preview switches to Edit
+      notePreview.addEventListener("dblclick", () => {
+        setEditorMode("raw");
+      });
+
+      // Paste handling directly on textarea
+      noteTextarea.addEventListener("paste", (e) => {
+        const clipboardData = e.clipboardData || window.clipboardData;
+        if (!clipboardData) return;
+
+        const plainText = clipboardData.getData("text/plain");
+        const htmlText = clipboardData.getData("text/html");
+
+        let textToInsert = plainText;
+        // If rich HTML is present without explicit markdown in plain text, convert key HTML structures
+        if (htmlText && (!plainText || htmlText.includes("<h") || htmlText.includes("<b>") || htmlText.includes("<strong>") || htmlText.includes("<li>"))) {
+          const converted = convertHtmlToMarkdown(htmlText);
+          if (converted && converted.trim().length > 0) {
+            textToInsert = converted;
+          }
+        }
+
+        if (textToInsert !== undefined) {
+          e.preventDefault();
+          const start = noteTextarea.selectionStart;
+          const end = noteTextarea.selectionEnd;
+          const currentVal = noteTextarea.value;
+          const updatedVal = currentVal.substring(0, start) + textToInsert + currentVal.substring(end);
+
+          noteTextarea.value = updatedVal;
+          state.noteText = updatedVal;
+          noteTextarea.selectionStart = noteTextarea.selectionEnd = start + textToInsert.length;
+
+          updateWordCount();
+          updateMarkdownPreview();
+          checkMarkdownPresence(updatedVal);
+
+          setSupervisorStatus(false);
+          clearTimeout(state.debounceTimer);
+          state.debounceTimer = setTimeout(() => {
+            evaluateNote();
+          }, 350);
+        }
+      });
+
       // Live debounced note editing
       noteTextarea.addEventListener("input", (e) => {
         state.noteText = e.target.value;
         updateWordCount();
+        updateMarkdownPreview();
+        checkMarkdownPresence(state.noteText);
         setSupervisorStatus(false);
         clearTimeout(state.debounceTimer);
         state.debounceTimer = setTimeout(() => {
@@ -500,6 +765,8 @@
           noteTextarea.value = found.text;
           state.noteText = found.text;
           updateWordCount();
+          updateMarkdownPreview();
+          checkMarkdownPresence(found.text);
           if (hint) hint.textContent = found.description || "";
           enrichmentToast.classList.add("hidden");
           
@@ -527,6 +794,8 @@
         const hint = document.getElementById("template-hint-text");
         if (hint) hint.textContent = "";
         updateWordCount();
+        updateMarkdownPreview();
+        checkMarkdownPresence("");
         enrichmentToast.classList.add("hidden");
         flushForkInspector();
         evaluateNote();
@@ -677,6 +946,8 @@
           noteTextarea.value = firstCase.text;
           state.noteText = firstCase.text;
           updateWordCount();
+          updateMarkdownPreview();
+          checkMarkdownPresence(firstCase.text);
           const hint = document.getElementById("template-hint-text");
           if (hint) hint.textContent = firstCase.description || "";
           flushForkInspector();
@@ -942,6 +1213,8 @@
       noteTextarea.value = currentText;
       state.noteText = currentText;
       updateWordCount();
+      updateMarkdownPreview();
+      checkMarkdownPresence(currentText);
 
       // Editor flash feedback
       noteTextarea.classList.add("enrichment-glow");
