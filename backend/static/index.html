@@ -133,17 +133,61 @@
       background: rgba(148, 163, 184, 0.1);
       font-weight: 600;
     }
-    .dark ::-webkit-scrollbar-thumb {
-      background: rgba(71, 85, 105, 0.5);
+
+    /* Note Highlight Backdrop Layer */
+    #clinical-note-backdrop {
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 22.75px;
+      letter-spacing: normal;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      box-sizing: border-box;
+      color: transparent;
+      pointer-events: none;
     }
-    /* Editor highlight flash on enrichment */
-    @keyframes pulse-emerald {
-      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
-      70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+
+    /* Clinical Highlight Mark in Textarea Backdrop */
+    .clinical-textarea-mark {
+      background-color: rgba(245, 158, 11, 0.35);
+      color: transparent;
+      border-radius: 4px;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.75), 0 2px 8px rgba(245, 158, 11, 0.25);
+      display: inline;
+      padding: 0;
+      margin: 0;
+      transition: all 0.15s ease-in-out;
     }
-    .enrichment-glow {
-      animation: pulse-emerald 1.2s ease-out;
+
+    .dark .clinical-textarea-mark {
+      background-color: rgba(251, 191, 36, 0.30);
+      box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.8), 0 2px 10px rgba(245, 158, 11, 0.35);
+    }
+
+    /* Markdown Preview Highlight Mark */
+    .clinical-preview-mark {
+      background-color: rgba(253, 230, 138, 0.85);
+      color: rgb(120, 53, 15);
+      border-radius: 4px;
+      padding: 1px 4px;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.85), 0 2px 8px rgba(245, 158, 11, 0.25);
+      display: inline;
+      font-weight: 600;
+      transition: all 0.15s ease-in-out;
+    }
+
+    .dark .clinical-preview-mark {
+      background-color: rgba(180, 83, 9, 0.55);
+      color: rgb(254, 243, 199);
+      box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.85), 0 2px 10px rgba(245, 158, 11, 0.35);
+    }
+
+    /* Active Ambiguity Card Style when hovered/targeted */
+    .ambiguity-card-active {
+      border-color: rgb(245, 158, 11) !important;
+      box-shadow: 0 4px 14px -2px rgba(245, 158, 11, 0.25), 0 2px 6px -2px rgba(0, 0, 0, 0.05) !important;
+      transform: translateY(-1px);
     }
   </style>
 </head>
@@ -275,11 +319,14 @@
       </div>
 
       <!-- Editor & Markdown Preview Container -->
-      <div class="flex-1 p-5 flex flex-col min-h-0 relative overflow-hidden">
+      <div id="editor-wrapper" class="flex-1 p-5 flex flex-col min-h-0 relative overflow-hidden">
+        <!-- Backdrop for highlighting textarea text -->
+        <div id="clinical-note-backdrop" class="absolute inset-0 p-5 pointer-events-none overflow-hidden select-none whitespace-pre-wrap break-words text-transparent font-sans text-[14px] leading-relaxed z-0" aria-hidden="true"></div>
+
         <!-- Direct Textarea -->
         <textarea
           id="clinical-note-input"
-          class="w-full flex-1 bg-transparent text-slate-900 dark:text-slate-100 text-[14px] leading-relaxed resize-none focus:outline-none placeholder:text-slate-300 dark:placeholder:text-slate-700 font-sans"
+          class="w-full flex-1 bg-transparent text-slate-900 dark:text-slate-100 text-[14px] leading-relaxed resize-none focus:outline-none placeholder:text-slate-300 dark:placeholder:text-slate-700 font-sans relative z-10"
           placeholder="Start drafting or paste clinical note here (supports plain text and Markdown)... TaxonNote continuously checks that conditions have the required laterality, acuity, and clinical specificity for unambiguous ICD-10-CM coding."
           spellcheck="false"
         ></textarea>
@@ -287,7 +334,7 @@
         <!-- Markdown Rendered Surface (shown when in preview mode) -->
         <div
           id="clinical-note-preview"
-          class="hidden w-full flex-1 overflow-y-auto text-slate-900 dark:text-slate-100 text-[14px] leading-relaxed markdown-body focus:outline-none select-text"
+          class="hidden w-full flex-1 overflow-y-auto text-slate-900 dark:text-slate-100 text-[14px] leading-relaxed markdown-body focus:outline-none select-text relative z-20"
           tabindex="0"
           title="Double-click to return to Edit mode"
         ></div>
@@ -454,10 +501,12 @@
       lastAcceptedFix: null,
       currentTheme: "system", // 'light' | 'dark' | 'system'
       editorMode: "raw", // 'raw' | 'markdown'
+      activeHighlightSpan: null,
     };
 
     // DOM Elements
     const noteTextarea = document.getElementById("clinical-note-input");
+    const clinicalNoteBackdrop = document.getElementById("clinical-note-backdrop");
     const editorModeRaw = document.getElementById("editor-mode-raw");
     const editorModeMarkdown = document.getElementById("editor-mode-markdown");
     const notePreview = document.getElementById("clinical-note-preview");
@@ -508,6 +557,16 @@
 
     function escapeRegExp(string) {
       return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
 
     // Initialize application
@@ -579,6 +638,11 @@
         editorModeMarkdown.className = inactiveClass;
         noteTextarea.classList.remove("hidden");
         notePreview.classList.add("hidden");
+        if (clinicalNoteBackdrop) clinicalNoteBackdrop.classList.remove("hidden");
+        syncBackdropLayout();
+        if (state.activeHighlightSpan) {
+          renderTextareaHighlight(noteTextarea.value, state.activeHighlightSpan.start, state.activeHighlightSpan.end);
+        }
         noteTextarea.focus();
       } else {
         editorModeRaw.className = inactiveClass;
@@ -586,6 +650,199 @@
         updateMarkdownPreview();
         noteTextarea.classList.add("hidden");
         notePreview.classList.remove("hidden");
+        if (clinicalNoteBackdrop) clinicalNoteBackdrop.classList.add("hidden");
+        if (state.activeHighlightSpan) {
+          renderMarkdownPreviewHighlight(state.activeHighlightSpan.text);
+        }
+      }
+    }
+
+    // Textarea & Markdown Highlight Synchronization
+    function syncBackdropLayout() {
+      if (!clinicalNoteBackdrop || !noteTextarea) return;
+      const textareaStyle = window.getComputedStyle(noteTextarea);
+      clinicalNoteBackdrop.style.fontFamily = textareaStyle.fontFamily;
+      clinicalNoteBackdrop.style.fontSize = textareaStyle.fontSize;
+      clinicalNoteBackdrop.style.lineHeight = textareaStyle.lineHeight;
+      clinicalNoteBackdrop.style.letterSpacing = textareaStyle.letterSpacing;
+      
+      const scrollbarWidth = noteTextarea.offsetWidth - noteTextarea.clientWidth;
+      clinicalNoteBackdrop.style.paddingRight = (20 + scrollbarWidth) + "px";
+      clinicalNoteBackdrop.scrollTop = noteTextarea.scrollTop;
+      clinicalNoteBackdrop.scrollLeft = noteTextarea.scrollLeft;
+    }
+
+    function highlightNoteText(targetInfo) {
+      if (!targetInfo) return;
+      const currentText = noteTextarea.value;
+      if (!currentText) return;
+
+      let targetText = typeof targetInfo === "string" 
+        ? targetInfo 
+        : (targetInfo.text || targetInfo.original_text || targetInfo.condition_name);
+      
+      let start = -1;
+      let end = -1;
+
+      if (targetInfo.span && typeof targetInfo.span.start === "number" && typeof targetInfo.span.end === "number") {
+        start = targetInfo.span.start;
+        end = targetInfo.span.end;
+      } else if (typeof targetInfo.target_start === "number" && typeof targetInfo.target_end === "number") {
+        start = targetInfo.target_start;
+        end = targetInfo.target_end;
+      }
+
+      // Verify whether the span matches currentText
+      if (start >= 0 && end <= currentText.length && targetText && currentText.substring(start, end).toLowerCase() === targetText.toLowerCase()) {
+        // Exact span match
+      } else if (targetText) {
+        // Locate targetText in currentText
+        const lowerText = currentText.toLowerCase();
+        const lowerTarget = targetText.toLowerCase();
+        let idx = lowerText.indexOf(lowerTarget);
+        if (idx !== -1) {
+          start = idx;
+          end = idx + targetText.length;
+        } else {
+          // Fallback: search by words/stems if phrase was modified
+          const words = targetText.split(/\s+/).filter(w => w.length > 2);
+          for (const w of words) {
+            idx = lowerText.indexOf(w.toLowerCase());
+            if (idx !== -1) {
+              start = idx;
+              end = idx + w.length;
+              break;
+            }
+          }
+        }
+      }
+
+      if (start < 0 || end <= start || start >= currentText.length) {
+        return;
+      }
+
+      const matchedSubstr = currentText.substring(start, end);
+      state.activeHighlightSpan = { start, end, text: matchedSubstr };
+
+      // Render highlight for raw textarea
+      renderTextareaHighlight(currentText, start, end);
+
+      // Render highlight for markdown preview if in markdown mode
+      if (state.editorMode === "markdown") {
+        renderMarkdownPreviewHighlight(matchedSubstr);
+      }
+
+      // Ensure highlight is comfortably in view
+      scrollHighlightIntoView();
+    }
+
+    function renderTextareaHighlight(text, start, end) {
+      if (!clinicalNoteBackdrop) return;
+      syncBackdropLayout();
+
+      const before = text.substring(0, start);
+      const match = text.substring(start, end);
+      const after = text.substring(end);
+
+      clinicalNoteBackdrop.innerHTML = 
+        escapeHtml(before) +
+        `<mark class="clinical-textarea-mark">${escapeHtml(match)}</mark>` +
+        escapeHtml(after) +
+        `<br style="display:none">`;
+    }
+
+    function renderMarkdownPreviewHighlight(targetText) {
+      if (!notePreview || !targetText) return;
+      const prevMark = notePreview.querySelector("#active-preview-mark");
+      if (prevMark) {
+        updateMarkdownPreview();
+      }
+      highlightInElement(notePreview, targetText);
+    }
+
+    function highlightInElement(container, searchText) {
+      if (!container || !searchText) return;
+      const lowerSearch = searchText.toLowerCase();
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+      let textNode;
+      while ((textNode = walker.nextNode())) {
+        const val = textNode.nodeValue;
+        const idx = val.toLowerCase().indexOf(lowerSearch);
+        if (idx !== -1) {
+          const matchText = val.substring(idx, idx + searchText.length);
+          const afterText = val.substring(idx + searchText.length);
+
+          textNode.nodeValue = val.substring(0, idx);
+
+          const mark = document.createElement("mark");
+          mark.id = "active-preview-mark";
+          mark.className = "clinical-preview-mark";
+          mark.textContent = matchText;
+
+          const afterNode = document.createTextNode(afterText);
+          textNode.parentNode.insertBefore(mark, textNode.nextSibling);
+          textNode.parentNode.insertBefore(afterNode, mark.nextSibling);
+          break;
+        }
+      }
+    }
+
+    function clearNoteHighlight() {
+      state.activeHighlightSpan = null;
+      if (clinicalNoteBackdrop) {
+        clinicalNoteBackdrop.innerHTML = "";
+      }
+      const previewMark = document.getElementById("active-preview-mark");
+      if (previewMark) {
+        updateMarkdownPreview();
+      }
+      document.querySelectorAll(".ambiguity-card-active").forEach(el => {
+        el.classList.remove("ambiguity-card-active");
+      });
+    }
+
+    function scrollHighlightIntoView() {
+      if (state.editorMode === "markdown") {
+        const mark = document.getElementById("active-preview-mark");
+        if (mark) {
+          mark.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      } else {
+        const mark = clinicalNoteBackdrop ? clinicalNoteBackdrop.querySelector("mark") : null;
+        if (mark && noteTextarea) {
+          const markTop = mark.offsetTop;
+          const viewTop = noteTextarea.scrollTop;
+          const viewHeight = noteTextarea.clientHeight;
+          if (markTop < viewTop + 30 || markTop > viewTop + viewHeight - 50) {
+            noteTextarea.scrollTo({
+              top: Math.max(0, markTop - 60),
+              behavior: "smooth"
+            });
+          }
+        }
+      }
+    }
+
+    function selectNoteSpan(conditionName, span) {
+      if (state.editorMode === "markdown") {
+        setEditorMode("raw");
+      }
+      const currentText = noteTextarea.value;
+      let start = span ? span.start : -1;
+      let end = span ? span.end : -1;
+
+      if (start < 0 || end <= start || !conditionName || currentText.substring(start, end).toLowerCase() !== conditionName.toLowerCase()) {
+        const idx = currentText.toLowerCase().indexOf((conditionName || "").toLowerCase());
+        if (idx !== -1) {
+          start = idx;
+          end = idx + conditionName.length;
+        }
+      }
+
+      if (start >= 0 && end > start && end <= currentText.length) {
+        noteTextarea.focus();
+        noteTextarea.setSelectionRange(start, end);
+        scrollHighlightIntoView();
       }
     }
 
@@ -694,8 +951,18 @@
         setEditorMode("raw");
       });
 
+      // Synchronize textarea backdrop scroll and input
+      noteTextarea.addEventListener("scroll", () => {
+        if (clinicalNoteBackdrop) {
+          clinicalNoteBackdrop.scrollTop = noteTextarea.scrollTop;
+          clinicalNoteBackdrop.scrollLeft = noteTextarea.scrollLeft;
+        }
+      });
+      window.addEventListener("resize", syncBackdropLayout);
+
       // Paste handling directly on textarea
       noteTextarea.addEventListener("paste", (e) => {
+        clearNoteHighlight();
         const clipboardData = e.clipboardData || window.clipboardData;
         if (!clipboardData) return;
 
@@ -725,6 +992,7 @@
           updateWordCount();
           updateMarkdownPreview();
           checkMarkdownPresence(updatedVal);
+          syncBackdropLayout();
 
           setSupervisorStatus(false);
           clearTimeout(state.debounceTimer);
@@ -736,10 +1004,12 @@
 
       // Live debounced note editing
       noteTextarea.addEventListener("input", (e) => {
+        clearNoteHighlight();
         state.noteText = e.target.value;
         updateWordCount();
         updateMarkdownPreview();
         checkMarkdownPresence(state.noteText);
+        syncBackdropLayout();
         setSupervisorStatus(false);
         clearTimeout(state.debounceTimer);
         state.debounceTimer = setTimeout(() => {
@@ -749,6 +1019,7 @@
 
       // Clinical template selector
       templateSelect.addEventListener("change", async (e) => {
+        clearNoteHighlight();
         const selectedId = e.target.value;
         const hint = document.getElementById("template-hint-text");
         if (!selectedId) {
@@ -767,6 +1038,7 @@
           updateWordCount();
           updateMarkdownPreview();
           checkMarkdownPresence(found.text);
+          syncBackdropLayout();
           if (hint) hint.textContent = found.description || "";
           enrichmentToast.classList.add("hidden");
           
@@ -788,6 +1060,7 @@
 
       // Clear & Copy buttons
       document.getElementById("btn-clear").addEventListener("click", () => {
+        clearNoteHighlight();
         noteTextarea.value = "";
         state.noteText = "";
         templateSelect.value = "";
@@ -796,6 +1069,7 @@
         updateWordCount();
         updateMarkdownPreview();
         checkMarkdownPresence("");
+        syncBackdropLayout();
         enrichmentToast.classList.add("hidden");
         flushForkInspector();
         evaluateNote();
@@ -856,11 +1130,13 @@
 
       // Node Enrichment Drawer actions
       btnCancelNodeEnrichment.addEventListener("click", () => {
+        clearNoteHighlight();
         forkNodeEnrichmentBar.classList.add("hidden");
         state.selectedNodeFix = null;
       });
 
       btnAcceptNodeEnrichment.addEventListener("click", () => {
+        clearNoteHighlight();
         if (state.selectedNodeFix) {
           applyQuickFix(state.selectedNodeFix);
           forkNodeEnrichmentBar.classList.add("hidden");
@@ -1097,12 +1373,26 @@
       conditions.forEach(c => {
         const chip = document.createElement("span");
         if (c.has_ambiguity) {
-          chip.className = "inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/50";
+          chip.className = "inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/50 cursor-pointer hover:shadow-xs hover:border-amber-400 dark:hover:border-amber-600 transition";
           chip.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-[9px] text-amber-500"></i><span>${c.condition_name}</span>`;
         } else {
-          chip.className = "inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50";
+          chip.className = "inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50 cursor-pointer hover:shadow-xs hover:border-emerald-400 dark:hover:border-emerald-600 transition";
           chip.innerHTML = `<i class="fa-solid fa-check text-[9px] text-emerald-500"></i><span>${c.condition_name}</span><span class="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 ml-1 font-semibold">${c.resolved_code || ''}</span>`;
         }
+
+        chip.addEventListener("mouseenter", () => {
+          highlightNoteText({
+            text: c.condition_name,
+            span: c.span
+          });
+        });
+        chip.addEventListener("mouseleave", () => {
+          clearNoteHighlight();
+        });
+        chip.addEventListener("click", () => {
+          selectNoteSpan(c.condition_name, c.span);
+        });
+
         conditionsChipsContainer.appendChild(chip);
       });
     }
@@ -1120,7 +1410,7 @@
 
       ambiguities.forEach(amb => {
         const card = document.createElement("div");
-        card.className = "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-3 border-l-amber-500 rounded-xl p-3.5 space-y-2.5 shadow-xs transition";
+        card.className = "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-amber-500 rounded-xl p-3.5 space-y-2.5 shadow-xs transition cursor-pointer hover:border-amber-400 dark:hover:border-amber-600";
         card.id = `card-${amb.id}`;
 
         card.innerHTML = `
@@ -1157,13 +1447,56 @@
 
         ambiguitiesList.appendChild(card);
 
+        // Hover & click listeners on ambiguity card
+        card.addEventListener("mouseenter", () => {
+          card.classList.add("ambiguity-card-active");
+          highlightNoteText({
+            text: amb.condition_name,
+            span: amb.span
+          });
+        });
+
+        card.addEventListener("mouseleave", () => {
+          card.classList.remove("ambiguity-card-active");
+          clearNoteHighlight();
+        });
+
+        card.addEventListener("click", (e) => {
+          if (e.target.closest("button")) return;
+          selectNoteSpan(amb.condition_name, amb.span);
+        });
+
         // Populate enrichment chips
         const fixesContainer = card.querySelector(`#fixes-container-${amb.id}`);
         amb.quick_fixes.forEach(fix => {
           const btn = document.createElement("button");
           btn.className = "px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 dark:text-emerald-300 dark:border-emerald-800/60 transition flex items-center space-x-1 cursor-pointer";
           btn.innerHTML = `<i class="fa-solid fa-check text-[10px] text-emerald-600 dark:text-emerald-400"></i><span>${fix.label}</span>`;
-          btn.addEventListener("click", () => {
+          
+          btn.addEventListener("mouseenter", (e) => {
+            e.stopPropagation();
+            highlightNoteText({
+              text: fix.original_text || amb.condition_name,
+              target_start: fix.target_start,
+              target_end: fix.target_end
+            });
+          });
+
+          btn.addEventListener("mouseleave", (e) => {
+            e.stopPropagation();
+            if (card.matches(":hover")) {
+              highlightNoteText({
+                text: amb.condition_name,
+                span: amb.span
+              });
+            } else {
+              clearNoteHighlight();
+            }
+          });
+
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            clearNoteHighlight();
             state.activeAmbiguity = amb;
             applyQuickFix(fix);
           });
@@ -1171,13 +1504,35 @@
         });
 
         // Fork inspector button
-        card.querySelector(".btn-inspect-fork").addEventListener("click", () => {
+        const forkBtn = card.querySelector(".btn-inspect-fork");
+        forkBtn.addEventListener("mouseenter", (e) => {
+          e.stopPropagation();
+          highlightNoteText({
+            text: amb.condition_name,
+            span: amb.span
+          });
+        });
+        forkBtn.addEventListener("mouseleave", (e) => {
+          e.stopPropagation();
+          if (card.matches(":hover")) {
+            highlightNoteText({
+              text: amb.condition_name,
+              span: amb.span
+            });
+          } else {
+            clearNoteHighlight();
+          }
+        });
+        forkBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          clearNoteHighlight();
           inspectTrajectoryFork(amb);
         });
       });
     }
 
     async function applyQuickFix(fix) {
+      clearNoteHighlight();
       const prevResult = state.supervisionResult;
       const prevScore = prevResult ? prevResult.coder_readiness_score : 0;
       const prevAmbCount = prevResult ? prevResult.ambiguity_count : 0;
@@ -1215,6 +1570,7 @@
       updateWordCount();
       updateMarkdownPreview();
       checkMarkdownPresence(currentText);
+      syncBackdropLayout();
 
       // Editor flash feedback
       noteTextarea.classList.add("enrichment-glow");
@@ -1263,31 +1619,43 @@
       const table = document.createElement("div");
       table.className = "border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900";
       
-      let rowsHtml = `
-        <div class="grid grid-cols-12 bg-slate-50 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-          <div class="col-span-3">Code</div>
-          <div class="col-span-6">Description</div>
-          <div class="col-span-3 text-right">Status</div>
-        </div>
+      const header = document.createElement("div");
+      header.className = "grid grid-cols-12 bg-slate-50 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider";
+      header.innerHTML = `
+        <div class="col-span-3">Code</div>
+        <div class="col-span-6">Description</div>
+        <div class="col-span-3 text-right">Status</div>
       `;
+      table.appendChild(header);
 
       previewItems.forEach(item => {
         const statusBadge = item.is_specific
           ? `<span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-semibold">Specific</span>`
           : `<span class="px-2 py-0.5 rounded bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] font-semibold">Unspecified</span>`;
 
-        rowsHtml += `
-          <div class="grid grid-cols-12 px-3 py-2.5 text-xs border-b border-slate-100 dark:border-slate-800/60 items-center hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
-            <div class="col-span-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">${item.code}</div>
-            <div class="col-span-6 text-slate-700 dark:text-slate-300 pr-2">
-              <div>${item.description}</div>
-            </div>
-            <div class="col-span-3 text-right">${statusBadge}</div>
+        const row = document.createElement("div");
+        row.className = "grid grid-cols-12 px-3 py-2.5 text-xs border-b border-slate-100 dark:border-slate-800/60 items-center hover:bg-slate-50 dark:hover:bg-slate-800/40 transition cursor-pointer";
+        row.innerHTML = `
+          <div class="col-span-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">${item.code}</div>
+          <div class="col-span-6 text-slate-700 dark:text-slate-300 pr-2">
+            <div>${item.description}</div>
           </div>
+          <div class="col-span-3 text-right">${statusBadge}</div>
         `;
+
+        row.addEventListener("mouseenter", () => {
+          highlightNoteText(item.condition_source);
+        });
+        row.addEventListener("mouseleave", () => {
+          clearNoteHighlight();
+        });
+        row.addEventListener("click", () => {
+          selectNoteSpan(item.condition_source);
+        });
+
+        table.appendChild(row);
       });
 
-      table.innerHTML = rowsHtml;
       coderPreviewContainer.appendChild(table);
     }
 
@@ -1415,6 +1783,19 @@
           state.cyInstance.fit(undefined, 25);
         }
       }, 80);
+
+      state.cyInstance.on('mouseover', 'node', function(evt) {
+        if (ambiguity) {
+          highlightNoteText({
+            text: ambiguity.condition_name,
+            span: ambiguity.span
+          });
+        }
+      });
+
+      state.cyInstance.on('mouseout', 'node', function(evt) {
+        clearNoteHighlight();
+      });
 
       state.cyInstance.on('tap', 'node', function(evt) {
         const node = evt.target;
@@ -1559,10 +1940,19 @@
         selectedNodeCodeBadge.textContent = matchedFix.branch_code ? `ICD-10: ${matchedFix.branch_code}` : 'Branch Selected';
         proposedEnrichmentPreview.textContent = `Replace "${matchedFix.original_text || ambiguity.condition_name}" with "${matchedFix.replacement_text}"`;
         forkNodeEnrichmentBar.classList.remove("hidden");
+        highlightNoteText({
+          text: matchedFix.original_text || ambiguity.condition_name,
+          target_start: matchedFix.target_start,
+          target_end: matchedFix.target_end
+        });
       } else {
         state.selectedNodeFix = null;
         selectedNodeBadge.textContent = nodeData.title || nodeData.label;
         selectedNodeCodeBadge.textContent = nodeData.isRoot ? 'Index Root' : (nodeData.isFork ? 'Branch Fork' : (nodeData.isCode ? 'Terminal Code' : 'Term Node'));
+        highlightNoteText({
+          text: ambiguity.condition_name,
+          span: ambiguity.span
+        });
         
         let previewMsg = `Hierarchy: ${nodeData.breadcrumb || nodeData.title}.`;
         if (nodeData.isCode) {
