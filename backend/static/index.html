@@ -1289,8 +1289,24 @@
       } else {
         state.selectedNodeFix = null;
         selectedNodeBadge.textContent = nodeData.title || nodeData.label;
-        selectedNodeCodeBadge.textContent = nodeData.isRoot ? 'Index Root' : (nodeData.isFork ? 'Branch Fork' : 'Term Node');
-        proposedEnrichmentPreview.textContent = `Hierarchy: ${nodeData.breadcrumb || nodeData.title}. Select a downstream branch node (e.g. Right, Left, Acute) to apply an enrichment.`;
+        selectedNodeCodeBadge.textContent = nodeData.isRoot ? 'Index Root' : (nodeData.isFork ? 'Branch Fork' : (nodeData.isCode ? 'Terminal Code' : 'Term Node'));
+        
+        let previewMsg = `Hierarchy: ${nodeData.breadcrumb || nodeData.title}.`;
+        if (nodeData.isCode) {
+          const codeVal = (nodeData.label || nodeData.title || "").trim();
+          if (codeVal === "J32.9") {
+            previewMsg = `Code J32.9 is defined in ICD-10 as "Chronic sinusitis, unspecified". In the ICD-10 Index, unqualified "sinusitis" defaults to this chronic code. For an acute illness, document "acute" to assign J01.90.`;
+          } else if (codeVal.startsWith("J01")) {
+            previewMsg = `Code ${codeVal} represents "Acute sinusitis". Requires explicit documentation of "acute" in the note.`;
+          } else if (ambiguity.unspecified_code_risk && ambiguity.unspecified_code_risk.includes(codeVal)) {
+            previewMsg = `Code ${codeVal}: ${ambiguity.unspecified_code_risk}`;
+          } else {
+            previewMsg += ` Terminal ICD-10 diagnostic code.`;
+          }
+        } else {
+          previewMsg += ` Select a downstream branch node (e.g. Acute, Chronic, Right, Left) to apply an enrichment.`;
+        }
+        proposedEnrichmentPreview.textContent = previewMsg;
         forkNodeEnrichmentBar.classList.remove("hidden");
       }
     }
