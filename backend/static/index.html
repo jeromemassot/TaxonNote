@@ -483,23 +483,39 @@
       });
 
       // Clinical template selector
-      templateSelect.addEventListener("change", (e) => {
+      templateSelect.addEventListener("change", async (e) => {
         const selectedId = e.target.value;
         const hint = document.getElementById("template-hint-text");
         if (!selectedId) {
           if (hint) hint.textContent = "";
+          flushForkInspector();
           return;
         }
         const templates = templateSelect._templatesData || [];
         const found = templates.find(t => t.id === selectedId);
         if (found) {
+          // Immediately flush the fork inspector so no stale nodes or state persist
+          flushForkInspector();
+
           noteTextarea.value = found.text;
           state.noteText = found.text;
           updateWordCount();
           if (hint) hint.textContent = found.description || "";
           enrichmentToast.classList.add("hidden");
-          forkNodeEnrichmentBar.classList.add("hidden");
-          evaluateNote();
+          
+          const evalResult = await evaluateNote();
+
+          // If the user is currently looking at the Fork tab, cleanly load the new scenario's fork
+          if (state.activeTab === "fork") {
+            if (evalResult && evalResult.ambiguities && evalResult.ambiguities.length > 0) {
+              inspectTrajectoryFork(evalResult.ambiguities[0]);
+            } else {
+              const titleEl = document.getElementById("fork-inspector-title");
+              const subtitleEl = document.getElementById("fork-inspector-subtitle");
+              if (titleEl) titleEl.textContent = "All Gaps Resolved";
+              if (subtitleEl) subtitleEl.textContent = "100% Coder Ready. No branching ambiguities in this note.";
+            }
+          }
         }
       });
 
@@ -512,7 +528,7 @@
         if (hint) hint.textContent = "";
         updateWordCount();
         enrichmentToast.classList.add("hidden");
-        forkNodeEnrichmentBar.classList.add("hidden");
+        flushForkInspector();
         evaluateNote();
       });
 
@@ -606,6 +622,12 @@
         // Auto-inspect first active ambiguity if none is currently selected
         if (!state.activeAmbiguity && state.supervisionResult && state.supervisionResult.ambiguities && state.supervisionResult.ambiguities.length > 0) {
           inspectTrajectoryFork(state.supervisionResult.ambiguities[0]);
+        } else if (!state.supervisionResult || !state.supervisionResult.ambiguities || state.supervisionResult.ambiguities.length === 0) {
+          flushForkInspector();
+          const titleEl = document.getElementById("fork-inspector-title");
+          const subtitleEl = document.getElementById("fork-inspector-subtitle");
+          if (titleEl) titleEl.textContent = "All Gaps Resolved";
+          if (subtitleEl) subtitleEl.textContent = "100% Coder Ready. No branching ambiguities in this note.";
         } else if (state.cyInstance) {
           setTimeout(() => {
             state.cyInstance.resize();
@@ -657,6 +679,7 @@
           updateWordCount();
           const hint = document.getElementById("template-hint-text");
           if (hint) hint.textContent = firstCase.description || "";
+          flushForkInspector();
           evaluateNote();
         }
       } catch (err) {
@@ -679,6 +702,7 @@
           coder_preview: [],
         };
         state.supervisionResult = emptyRes;
+        flushForkInspector();
         renderResults(emptyRes);
         setSupervisorStatus(true);
         return emptyRes;
@@ -992,6 +1016,56 @@
 
       table.innerHTML = rowsHtml;
       coderPreviewContainer.appendChild(table);
+    }
+
+    function flushForkInspector(options = {}) {
+      const { resetSelector = true, resetTitle = true } = options;
+
+      // 1. Destroy Cytoscape instance if any
+      if (state.cyInstance) {
+        try {
+          state.cyInstance.destroy();
+        } catch (e) {
+          console.warn("Error destroying cyInstance:", e);
+        }
+        state.cyInstance = null;
+      }
+
+      // 2. Clear canvas container DOM
+      const cyContainer = document.getElementById("cy-fork-canvas");
+      if (cyContainer) {
+        cyContainer.innerHTML = "";
+      }
+
+      // 3. Reset internal inspection state
+      state.activeAmbiguity = null;
+      state.selectedNodeFix = null;
+      state.lastAcceptedFix = null;
+
+      // 4. Hide interactive node enrichment drawer
+      if (forkNodeEnrichmentBar) {
+        forkNodeEnrichmentBar.classList.add("hidden");
+      }
+
+      // 5. Reset titles & restore placeholder
+      const titleEl = document.getElementById("fork-inspector-title");
+      const subtitleEl = document.getElementById("fork-inspector-subtitle");
+      const placeholder = document.getElementById("fork-canvas-placeholder");
+
+      if (resetTitle) {
+        if (titleEl) titleEl.textContent = "Trajectory Branch Inspector";
+        if (subtitleEl) subtitleEl.textContent = "Tap any branch node below to accept enrichment.";
+      }
+
+      if (placeholder) {
+        placeholder.classList.remove("hidden");
+      }
+
+      // 6. Reset ambiguity selector
+      if (resetSelector && forkAmbiguitySelector) {
+        forkAmbiguitySelector.innerHTML = `<option value="">No active forks</option>`;
+        forkAmbiguitySelector.classList.add("hidden");
+      }
     }
 
     async function inspectTrajectoryFork(ambiguity) {
